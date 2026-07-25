@@ -6,8 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		13D83BB9301549F800B93C8A /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 13D83BB8301549F800B93C8A /* GoogleMobileAds */; };
+		13D83BBC30154A9200B93C8A /* ReceiptParser in Frameworks */ = {isa = PBXBuildFile; productRef = 13D83BBB30154A9200B93C8A /* ReceiptParser */; };
+		13D83BBE30154A9200B93C8A /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 13D83BBD30154A9200B93C8A /* RevenueCat */; };
+		13D83BC030154A9200B93C8A /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = 13D83BBF30154A9200B93C8A /* RevenueCatUI */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
-		13D83B883015455F00B93C8A /* blocks.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = blocks.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		13D83B883015455F00B93C8A /* Stoke Block Puzzle.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Stoke Block Puzzle.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -23,6 +30,10 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				13D83BC030154A9200B93C8A /* RevenueCatUI in Frameworks */,
+				13D83BBC30154A9200B93C8A /* ReceiptParser in Frameworks */,
+				13D83BB9301549F800B93C8A /* GoogleMobileAds in Frameworks */,
+				13D83BBE30154A9200B93C8A /* RevenueCat in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -40,7 +51,7 @@
 		13D83B893015455F00B93C8A /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				13D83B883015455F00B93C8A /* blocks.app */,
+				13D83B883015455F00B93C8A /* Stoke Block Puzzle.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,9 +59,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		13D83B873015455F00B93C8A /* blocks */ = {
+		13D83B873015455F00B93C8A /* Hot Blocks */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 13D83B933015456000B93C8A /* Build configuration list for PBXNativeTarget "blocks" */;
+			buildConfigurationList = 13D83B933015456000B93C8A /* Build configuration list for PBXNativeTarget "Hot Blocks" */;
 			buildPhases = (
 				13D83B843015455F00B93C8A /* Sources */,
 				13D83B853015455F00B93C8A /* Frameworks */,
@@ -63,11 +74,15 @@
 			fileSystemSynchronizedGroups = (
 				13D83B8A3015455F00B93C8A /* blocks */,
 			);
-			name = blocks;
+			name = "Hot Blocks";
 			packageProductDependencies = (
+				13D83BB8301549F800B93C8A /* GoogleMobileAds */,
+				13D83BBB30154A9200B93C8A /* ReceiptParser */,
+				13D83BBD30154A9200B93C8A /* RevenueCat */,
+				13D83BBF30154A9200B93C8A /* RevenueCatUI */,
 			);
 			productName = blocks;
-			productReference = 13D83B883015455F00B93C8A /* blocks.app */;
+			productReference = 13D83B883015455F00B93C8A /* Stoke Block Puzzle.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -85,7 +100,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 13D83B833015455F00B93C8A /* Build configuration list for PBXProject "blocks" */;
+			buildConfigurationList = 13D83B833015455F00B93C8A /* Build configuration list for PBXProject "Hot Blocks" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -94,12 +109,16 @@
 			);
 			mainGroup = 13D83B7F3015455F00B93C8A;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				13D83BB7301549F800B93C8A /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
+				13D83BBA30154A9200B93C8A /* XCRemoteSwiftPackageReference "purchases-ios" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 13D83B893015455F00B93C8A /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				13D83B873015455F00B93C8A /* blocks */,
+				13D83B873015455F00B93C8A /* Hot Blocks */,
 			);
 		};
 /* End PBXProject section */
@@ -270,7 +289,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.smcgames..blocks;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Stoke Block Puzzle";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -314,7 +333,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.smcgames..blocks;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Stoke Block Puzzle";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -332,7 +351,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		13D83B833015455F00B93C8A /* Build configuration list for PBXProject "blocks" */ = {
+		13D83B833015455F00B93C8A /* Build configuration list for PBXProject "Hot Blocks" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				13D83B913015456000B93C8A /* Debug */,
@@ -341,7 +360,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		13D83B933015456000B93C8A /* Build configuration list for PBXNativeTarget "blocks" */ = {
+		13D83B933015456000B93C8A /* Build configuration list for PBXNativeTarget "Hot Blocks" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				13D83B943015456000B93C8A /* Debug */,
@@ -351,6 +370,48 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		13D83BB7301549F800B93C8A /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 13.7.0;
+			};
+		};
+		13D83BBA30154A9200B93C8A /* XCRemoteSwiftPackageReference "purchases-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.81.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		13D83BB8301549F800B93C8A /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 13D83BB7301549F800B93C8A /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
+		};
+		13D83BBB30154A9200B93C8A /* ReceiptParser */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 13D83BBA30154A9200B93C8A /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = ReceiptParser;
+		};
+		13D83BBD30154A9200B93C8A /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 13D83BBA30154A9200B93C8A /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = RevenueCat;
+		};
+		13D83BBF30154A9200B93C8A /* RevenueCatUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 13D83BBA30154A9200B93C8A /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = RevenueCatUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 13D83B803015455F00B93C8A /* Project object */;
 }

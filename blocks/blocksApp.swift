@@ -9,9 +9,15 @@ import SwiftUI
 
 @main
 struct blocksApp: App {
+    init() {
+        // Initialize RevenueCat
+        PurchaseManager.shared.configure()
+    }
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .preferredColorScheme(.dark)
         }
     }
 }

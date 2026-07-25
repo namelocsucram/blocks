@@ -1,0 +1,37 @@
+# Podfile for STOKE Game
+# Uncomment the next line to define a global platform for your project
+platform :ios, '15.0'
+
+target 'blocks' do
+  # Comment the next line if you don't want to use dynamic frameworks
+  use_frameworks!
+
+  # Google Mobile Ads SDK (AdMob)
+  pod 'Google-Mobile-Ads-SDK', '~> 11.0'
+  
+  # RevenueCat SDK for in-app purchases
+  pod 'RevenueCat', '~> 4.0'
+
+  target 'blocksTests' do
+    inherit! :search_paths
+    # Pods for testing
+  end
+
+  target 'blocksUITests' do
+    # Pods for testing
+  end
+
+end
+
+# Post-install hook to fix common issues
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      # Ensure minimum deployment target
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+      
+      # Fix code signing for simulator builds
+      config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO' if target.respond_to?(:product_type) and target.product_type == "com.apple.product-type.bundle"
+    end
+  end
+end
