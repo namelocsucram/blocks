@@ -33,8 +33,8 @@ class PurchaseManager: NSObject {
     }
     
     func configure() {
-        Purchases.logLevel = .debug
-        Purchases.configure(withAPIKey: apiKey)
+        // TODO: Replace apiKey with production appl_... key from RevenueCat dashboard
+        // Disabled until then — test_ keys crash in release builds
     }
     
     @objc private func handlePurchaseAction(_ notification: Notification) {
