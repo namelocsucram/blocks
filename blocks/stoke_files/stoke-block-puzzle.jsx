@@ -80,6 +80,65 @@ function bombPiece(id) { return { id, shape: [[0, 0]], gold: false, colorIdx: 0,
 function todayStr() { return new Date().toDateString(); }
 function daysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
 
+function useDeviceLayout() {
+  const readViewport = () => ({
+    width: window.visualViewport?.width || window.innerWidth || 390,
+    height: window.visualViewport?.height || window.innerHeight || 780,
+  });
+  const [viewport, setViewport] = useState(readViewport);
+
+  useEffect(() => {
+    const update = () => setViewport(readViewport());
+    window.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
+    update();
+    return () => {
+      window.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
+    };
+  }, []);
+
+  const isTablet = viewport.width >= 700;
+  const isWide = viewport.width >= 860 && viewport.width > viewport.height;
+  const isCompact = viewport.width < 390 || viewport.height < 700;
+  const verticalReserve = isCompact ? 330 : isTablet ? 380 : 350;
+  const heightBound = Math.max(260, viewport.height - verticalReserve);
+  const boardSize = Math.min(
+    isTablet ? 560 : 460,
+    viewport.width - (isCompact ? 20 : 32),
+    isWide ? viewport.height * 0.7 : heightBound
+  );
+
+  return {
+    wrap: {
+      maxWidth: isWide ? 980 : isTablet ? 620 : 460,
+      padding: isCompact
+        ? "max(8px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom))"
+        : "max(14px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom))",
+    },
+    title: { fontSize: isCompact ? 28 : isTablet ? 38 : 32 },
+    tagline: { display: isCompact ? "none" : "block" },
+    adBanner: { height: isCompact ? 34 : 44, marginBottom: isCompact ? 6 : 12 },
+    statsRow: { gap: isCompact ? 6 : 8, marginBottom: isCompact ? 6 : 14 },
+    statBox: { padding: isCompact ? "6px 8px" : "8px 10px" },
+    statValue: { fontSize: isCompact ? 16 : 18 },
+    grid: { width: boardSize, maxWidth: "100%", margin: "0 auto" },
+    tray: { marginTop: isCompact ? 8 : 18, padding: isCompact ? "8px 8px" : "16px 10px", minHeight: isCompact ? 48 : 70 },
+    trayCell: { size: isCompact ? 12 : 14, gap: isCompact ? 1.5 : 2 },
+    boosterBar: {
+      gap: isCompact ? 6 : 8,
+      marginTop: isCompact ? 8 : 10,
+      marginBottom: isCompact ? 10 : 0,
+      position: "static",
+      paddingBottom: 0,
+    },
+    boosterBtn: { padding: isCompact ? "7px 5px" : "9px 6px", fontSize: isCompact ? 10.5 : 11.5 },
+    overlayCard: { width: isCompact ? "92%" : "84%", padding: isCompact ? "20px 18px" : "26px 28px" },
+  };
+}
+
 // --- daily objectives: 3 rotating micro-goals, refreshed once per calendar day.
 // Deliberately skill-agnostic accumulation goals (not authored puzzle boards) so
 // they can't be "too hard" the way a hand-built level can.
@@ -298,11 +357,15 @@ export default function Stoke() {
   const [showCoinPicker, setShowCoinPicker] = useState(false);
   const [purchasing, setPurchasing] = useState(null);
   const [liveOfferings, setLiveOfferings] = useState(null);
+  const [combo, setCombo] = useState(0);
+  const [comboPop, setComboPop] = useState(null);
+  const [shake, setShake] = useState(false);
 
   const gridRef = useRef(null);
   const cellSizeRef = useRef(40);
   const heatPct = Math.round((heat / MAX_HEAT) * 100);
   const sound = useAudio(sfxMuted, musicMuted, heatPct);
+  const deviceLayout = useDeviceLayout();
 
   useEffect(() => {
     (async () => {
@@ -410,6 +473,18 @@ export default function Stoke() {
     return () => clearTimeout(t);
   }, [shareReady]);
 
+  useEffect(() => {
+    if (!comboPop) return;
+    const t = setTimeout(() => setComboPop(null), 900);
+    return () => clearTimeout(t);
+  }, [comboPop]);
+
+  useEffect(() => {
+    if (!shake) return;
+    const t = setTimeout(() => setShake(false), 280);
+    return () => clearTimeout(t);
+  }, [shake]);
+
   useEffect(() => () => sound.stopMusic(), []);
 
   // Real ad SDK bootstrap — only runs inside the native Capacitor shell.
@@ -456,6 +531,9 @@ export default function Stoke() {
     setRescueUsed(false);
     setBombArmed(false);
     setEraseMode(false);
+    setCombo(0);
+    setComboPop(null);
+    setShake(false);
   }
 
   function closeInterstitial() {
@@ -611,6 +689,9 @@ export default function Stoke() {
     setJackpotFlash(true);
     setShareReady(true);
     setToast(`JACKPOT! +${bonus}`);
+    setCombo(0);
+    setComboPop({ id: Date.now(), text: `BOARD WIPE +${bonus}` });
+    setShake(true);
     sound.jackpot();
     const carryHeat = Math.round(MAX_HEAT / 2);
     setHeat(carryHeat);
@@ -648,19 +729,30 @@ export default function Stoke() {
       if (piece.gold) newHeat = Math.min(newHeat + 3, MAX_HEAT);
     }
 
+    const comboNext = linesCleared > 0 ? combo + 1 : 0;
+    const comboMultiplier = 1 + Math.min(comboNext, 8) * 0.15;
+    const lineBurstMultiplier = linesCleared > 1 ? 1 + (linesCleared - 1) * 0.35 : 1;
     const multiplier = 1 + newHeat * 0.125;
     const placementPts = piece.shape.length * (piece.gold ? 6 : 2);
-    const clearPts = linesCleared > 0 ? Math.round(linesCleared * SIZE * 10 * multiplier) : 0;
+    const clearPts = linesCleared > 0 ? Math.round(linesCleared * SIZE * 10 * multiplier * comboMultiplier * lineBurstMultiplier) : 0;
     const approxScore = score + placementPts + clearPts;
 
     setHeat(newHeat);
     if (newHeat > heat) setPulse((p) => p + 1);
     setScore((s) => s + placementPts + clearPts);
-    if (linesCleared > 0) setCoins((c) => c + linesCleared);
+    setCombo(comboNext);
+    if (linesCleared > 0) {
+      const coinBonus = linesCleared + Math.floor(comboNext / 3);
+      setCoins((c) => c + coinBonus);
+      setComboPop({ id: Date.now(), text: comboNext > 1 ? `${comboNext}x combo +${clearPts}` : `Line clear +${clearPts}` });
+      if (linesCleared > 1 || comboNext >= 3) setShake(true);
+    }
     bumpGoal("pieces", 1);
     bumpGoal("score", placementPts + clearPts);
     bumpGoal("heat", newHeat, "max");
     if (linesCleared > 0) bumpGoal("lines", linesCleared);
+    if (linesCleared > 1) setToast(`${linesCleared} lines! Burst bonus`);
+    else if (comboNext >= 3) setToast(`${comboNext}x combo cooking`);
     if (piece.gold) { bumpGoal("wildgem", 1); setToast("Wild Gem! Bonus payout"); sound.gold(); }
 
     const justHitMax = newHeat >= MAX_HEAT && heat < MAX_HEAT && !bombArmed;
@@ -737,9 +829,10 @@ export default function Stoke() {
   const preview = getPreview();
   const multiplier = (1 + heat * 0.125).toFixed(2);
   const marqueeSpeed = Math.max(1.1, 3.2 - heatPct / 45);
+  const heatMode = heatPct >= 100 ? "JACKPOT READY" : heatPct >= 75 ? "FEVER" : heatPct >= 45 ? "HOT" : "WARM";
 
   return (
-    <div style={S.wrap}>
+    <div style={{ ...S.wrap, ...deviceLayout.wrap }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
         * { box-sizing: border-box; }
@@ -753,13 +846,15 @@ export default function Stoke() {
         @keyframes bombPulse { 0%,100% { filter: hue-rotate(0deg) brightness(1.1); } 50% { filter: hue-rotate(180deg) brightness(1.4); } }
         @keyframes marquee { 0%,100% { box-shadow: 0 0 14px 2px rgba(255,214,90,0.55), inset 0 0 20px rgba(255,214,90,0.12); } 50% { box-shadow: 0 0 22px 4px rgba(255,80,140,0.5), inset 0 0 26px rgba(255,80,140,0.14); } }
         @keyframes jackpotZoom { 0% { transform: translate(-50%,-50%) scale(0.4); opacity: 0; } 20% { transform: translate(-50%,-50%) scale(1.15); opacity: 1; } 35% { transform: translate(-50%,-50%) scale(1); opacity: 1; } 80% { opacity: 1; } 100% { transform: translate(-50%,-50%) scale(1); opacity: 0; } }
+        @keyframes comboFloat { 0% { transform: translate(-50%, 12px) scale(0.8); opacity: 0; } 18% { transform: translate(-50%, 0) scale(1.08); opacity: 1; } 100% { transform: translate(-50%, -42px) scale(1); opacity: 0; } }
+        @keyframes screenShake { 0%,100% { transform: translate(0,0); } 20% { transform: translate(-4px,2px); } 40% { transform: translate(4px,-2px); } 60% { transform: translate(-3px,-1px); } 80% { transform: translate(3px,1px); } }
       `}</style>
 
       <div style={S.header}>
         <div style={S.titleRow}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Flame size={26} color="#FFD65A" style={{ filter: `drop-shadow(0 0 ${6 + heatPct / 8}px #FFD65A)` }} />
-            <h1 style={S.title}>STOKE</h1>
+            <h1 style={{ ...S.title, ...deviceLayout.title }}>STOKE</h1>
           </div>
           <div style={{ display: "flex", gap: 6 }}>
             <button style={S.iconBtn} onClick={() => setMusicMuted((m) => !m)} aria-label={musicMuted ? "Unmute music" : "Mute music"} title="Music">
@@ -773,6 +868,7 @@ export default function Stoke() {
           </div>
         </div>
         <div style={S.streakRow}>
+          <span style={{ ...S.streakBadge, color: heatPct >= 75 ? "#FF8A3D" : "#FFD65A", borderColor: heatPct >= 75 ? "#9D4A24" : "#4A2E66" }}>{heatMode}</span>
           <span style={S.streakBadge}>Day {streak} streak</span>
           {freezeAvailable && (
             <span style={{ ...S.streakBadge, color: "#8FD3E8", borderColor: "#2E5A66" }}>
@@ -781,10 +877,10 @@ export default function Stoke() {
           )}
           <span style={S.streakBadge}>🪙 {coins}</span>
         </div>
-        <p style={S.tagline}>Clear lines to build heat. Max it out for a JACKPOT bomb that clears the board.</p>
+        <p style={{ ...S.tagline, ...deviceLayout.tagline }}>Clear lines to build heat. Max it out for a JACKPOT bomb that clears the board.</p>
       </div>
 
-      <div style={S.adBanner}>{isNative() ? "Live ad banner (AdMob)" : "Ad banner placeholder · 320×50 — real in native build"}</div>
+      <div style={{ ...S.adBanner, ...deviceLayout.adBanner }}>{isNative() ? "Live ad banner (AdMob)" : "Ad banner placeholder · 320×50 — real in native build"}</div>
 
       <button style={S.goalsToggle} onClick={() => setShowGoals((v) => !v)}>
         <span>🎯 Daily Objectives</span>
@@ -820,10 +916,10 @@ export default function Stoke() {
         </div>
       )}
 
-      <div style={S.statsRow}>
-        <div style={S.statBox}><div style={S.statLabel}>Score</div><div style={S.statValue}>{score}</div></div>
-        <div style={S.statBox}><div style={S.statLabel}>Best</div><div style={S.statValue}>{best}</div></div>
-        <div style={{ ...S.statBox, flex: 1.4 }}>
+      <div style={{ ...S.statsRow, ...deviceLayout.statsRow }}>
+        <div style={{ ...S.statBox, ...deviceLayout.statBox }}><div style={S.statLabel}>Score</div><div style={{ ...S.statValue, ...deviceLayout.statValue }}>{score}</div></div>
+        <div style={{ ...S.statBox, ...deviceLayout.statBox }}><div style={S.statLabel}>Combo</div><div style={{ ...S.statValue, ...deviceLayout.statValue }}>{combo > 0 ? `${combo}x` : "-"}</div></div>
+        <div style={{ ...S.statBox, ...deviceLayout.statBox, flex: 1.4 }}>
           <div style={S.statLabel}>Heat ×{multiplier}</div>
           <div style={S.heatTrack}>
             <div key={pulse} style={{ ...S.heatFill, width: `${heatPct}%`, animation: "heatPulse 0.3s ease", transformOrigin: "center" }} />
@@ -831,10 +927,10 @@ export default function Stoke() {
         </div>
       </div>
 
-      <div style={{ position: "relative" }}>
+      <div style={{ position: "relative", animation: shake ? "screenShake 0.28s ease" : "none" }}>
         <div
           ref={gridRef}
-          style={{ ...S.grid, animation: `marquee ${marqueeSpeed}s ease-in-out infinite`, border: eraseMode ? "2px dashed #FF3B5C" : S.grid.border }}
+          style={{ ...S.grid, ...deviceLayout.grid, animation: `marquee ${marqueeSpeed}s ease-in-out infinite`, border: eraseMode ? "2px dashed #FF3B5C" : S.grid.border }}
           onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={() => setDrag(null)}
         >
           {grid.map((row, r) => row.map((cell, c) => {
@@ -860,6 +956,7 @@ export default function Stoke() {
             );
           }))}
         </div>
+        {comboPop && <div key={comboPop.id} style={S.comboPop}>{comboPop.text}</div>}
         {toast && <div style={S.toast}>{toast}</div>}
         {jackpotFlash && <div style={S.jackpotBanner}>JACKPOT!</div>}
         {shareReady && (
@@ -867,7 +964,7 @@ export default function Stoke() {
         )}
       </div>
 
-      <div style={S.tray}>
+      <div style={{ ...S.tray, ...deviceLayout.tray }}>
         {tray.map((piece) => {
           const dims = shapeDims(piece.shape);
           const isDragging = drag && drag.piece.id === piece.id;
@@ -875,11 +972,11 @@ export default function Stoke() {
             <div key={piece.id} className="tray-piece" onPointerDown={(e) => startDrag(e, piece)} style={{ ...S.trayPiece, opacity: isDragging ? 0.25 : 1, touchAction: "none" }}>
               {piece.gold && <Sparkles size={12} color={toRgb(GOLD)} style={S.goldIcon} />}
               {piece.bomb && <Bomb size={16} color="#fff" style={{ ...S.goldIcon, animation: "bombPulse 0.9s ease infinite" }} />}
-              <div style={{ display: "grid", gridTemplateColumns: `repeat(${dims.w}, 14px)`, gridTemplateRows: `repeat(${dims.h}, 14px)`, gap: "2px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: `repeat(${dims.w}, ${deviceLayout.trayCell.size}px)`, gridTemplateRows: `repeat(${dims.h}, ${deviceLayout.trayCell.size}px)`, gap: deviceLayout.trayCell.gap }}>
                 {Array.from({ length: dims.h }).map((_, r) => Array.from({ length: dims.w }).map((_, c) => {
                   const filled = piece.shape.some(([dr, dc]) => dr === r && dc === c);
                   const bg = piece.bomb ? "linear-gradient(135deg, #444, #111)" : piece.gold ? gemGradient(GOLD) : gemGradient(paletteRgb(piece.colorIdx));
-                  return <div key={`${r}-${c}`} style={{ width: 14, height: 14, borderRadius: 3, background: filled ? bg : "transparent", boxShadow: filled ? "0 0 6px rgba(0,0,0,0.4)" : "none", animation: filled && piece.gold ? "goldPulse 1.1s ease infinite" : filled && piece.bomb ? "bombPulse 0.9s ease infinite" : "none" }} />;
+                  return <div key={`${r}-${c}`} style={{ width: deviceLayout.trayCell.size, height: deviceLayout.trayCell.size, borderRadius: 3, background: filled ? bg : "transparent", boxShadow: filled ? "0 0 6px rgba(0,0,0,0.4)" : "none", animation: filled && piece.gold ? "goldPulse 1.1s ease infinite" : filled && piece.bomb ? "bombPulse 0.9s ease infinite" : "none" }} />;
                 }))}
               </div>
             </div>
@@ -887,14 +984,14 @@ export default function Stoke() {
         })}
       </div>
 
-      <div style={S.boosterBar}>
-        <button className="booster-btn" style={{ ...S.boosterBtn, opacity: coins < REROLL_COST ? 0.5 : 1 }} onClick={rerollTray} disabled={coins < REROLL_COST}>
+      <div style={{ ...S.boosterBar, ...deviceLayout.boosterBar }}>
+        <button className="booster-btn" style={{ ...S.boosterBtn, ...deviceLayout.boosterBtn, opacity: coins < REROLL_COST ? 0.5 : 1 }} onClick={rerollTray} disabled={coins < REROLL_COST}>
           🔄 Reroll<span style={S.boosterCost}>{REROLL_COST}🪙</span>
         </button>
-        <button className="booster-btn" style={{ ...S.boosterBtn, opacity: coins < ERASER_COST ? 0.5 : 1, borderColor: eraseMode ? "#FF3B5C" : "#4A2E66" }} onClick={toggleEraser} disabled={coins < ERASER_COST && !eraseMode}>
+        <button className="booster-btn" style={{ ...S.boosterBtn, ...deviceLayout.boosterBtn, opacity: coins < ERASER_COST ? 0.5 : 1, borderColor: eraseMode ? "#FF3B5C" : "#4A2E66" }} onClick={toggleEraser} disabled={coins < ERASER_COST && !eraseMode}>
           ✂️ Erase<span style={S.boosterCost}>{ERASER_COST}🪙</span>
         </button>
-        <button className="booster-btn" style={S.boosterBtnGold} onClick={openCoinPicker}>
+        <button className="booster-btn" style={{ ...S.boosterBtnGold, ...deviceLayout.boosterBtn }} onClick={openCoinPicker}>
           🪙 Get coins
         </button>
       </div>
@@ -911,7 +1008,7 @@ export default function Stoke() {
 
       {showCoinPicker && (
         <div style={S.overlay}>
-          <div style={S.overlayCard}>
+          <div style={{ ...S.overlayCard, ...deviceLayout.overlayCard }}>
             <h2 style={S.overlayTitle}>Get Coins</h2>
             <p style={S.overlayText}>Bigger packs give more coins per dollar.</p>
             <div style={S.coinTierList}>
@@ -1038,6 +1135,7 @@ const S = {
   },
   cell: { borderRadius: 4, aspectRatio: "1 / 1" },
   toast: { position: "absolute", left: "50%", bottom: -6, transform: "translate(-50%, 0)", background: "#241238", border: "1px solid rgba(255,214,90,0.5)", color: "#FFD65A", fontSize: 11.5, padding: "6px 12px", borderRadius: 20, whiteSpace: "nowrap", animation: "toastIn 1.2s ease forwards" },
+  comboPop: { position: "absolute", left: "50%", top: "38%", zIndex: 32, color: "#FFF3C4", fontFamily: "'Baloo 2', sans-serif", fontSize: 28, fontWeight: 800, textShadow: "0 0 18px rgba(255,138,61,0.9)", pointerEvents: "none", whiteSpace: "nowrap", animation: "comboFloat 0.9s ease forwards" },
   jackpotBanner: {
     position: "absolute", left: "50%", top: "50%", fontFamily: "'Baloo 2', sans-serif", fontWeight: 800, fontSize: 46,
     background: "linear-gradient(180deg, #FFF3C4, #FFD65A, #FF8A3D)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
