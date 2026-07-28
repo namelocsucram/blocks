@@ -1,6 +1,13 @@
-# 🎮 STOKE Game - Xcode Conversion Complete!
+# STOKE Game - Xcode Conversion Summary
 
-Your HTML5 game has been converted to a native iOS app with full monetization integration.
+This is a historical conversion summary. The current app is a native SwiftUI/WebKit wrapper around a production-bundled web game.
+
+Current correction:
+- The live app loads generated `stoke_files/index.html`.
+- The native JavaScript bridge is currently disabled for runtime stability.
+- Gameplay persistence currently uses WebView `localStorage`.
+- Native AdMob and RevenueCat handlers are staged but inactive until a safe bridge mode is re-enabled and tested.
+- TestFlight still requires privacy-label review, UMP/ATT verification, RevenueCat production key, App Store Connect products, and real-device sandbox testing.
 
 ## 📦 What Was Created
 
@@ -66,17 +73,16 @@ open blocks.xcworkspace  # Important: use .xcworkspace!
 - Canvas rendering
 
 ✅ **Persistent Storage**
-- Saves to UserDefaults automatically
+- Saves to WebView `localStorage` while the native bridge is disabled
 - Score, settings, streaks all persist
 
-✅ **AdMob Integration**
-- Banner at bottom (auto-loads on launch)
-- Interstitial every 3 games
-- Rewarded video for continues
+⚠️ **AdMob Integration**
+- Native AdMob code is staged but inactive while the bridge is disabled
+- Browser/test placeholder flows cover banner, interstitial, and rewarded rescue
 
-✅ **In-App Purchases**
-- 4 coin packs ready to configure
-- RevenueCat handles receipts/subscriptions
+⚠️ **In-App Purchases**
+- 4 coin packs are represented in the UI
+- RevenueCat code is staged but inactive while the bridge is disabled
 
 ✅ **Daily Objectives**
 - Track progress across app sessions
@@ -116,10 +122,10 @@ open blocks.xcworkspace  # Important: use .xcworkspace!
            ▼
 ┌─────────────────────┐
 │   WKWebView         │ ← WebViewContainer
-│   (loads stoke.html)│
+│   (loads index.html)│
 └──────────┬──────────┘
            │
-           ▼ JavaScript Bridge
+           ▼ JavaScript Bridge (currently disabled)
            │
      ┌─────┴─────┐
      ▼           ▼
@@ -130,8 +136,8 @@ open blocks.xcworkspace  # Important: use .xcworkspace!
 ```
 
 ### Communication Flow
-1. **HTML → Swift**: JavaScript calls `window.storage.set()` → Swift receives via message handler → Saves to UserDefaults
-2. **Swift → HTML**: Notifications posted → Message handler evaluates JavaScript → Updates game state
+1. **Current runtime**: JavaScript uses local browser storage and browser/test monetization fallbacks.
+2. **Inactive bridge path**: JavaScript can call `window.storage` / `window.Capacitor` only after a safe bridge mode is re-enabled.
 
 ## 🧪 Testing Checklist
 
@@ -140,7 +146,7 @@ Quick test to verify everything works:
 - [ ] App launches and shows game
 - [ ] Can place pieces and clear lines
 - [ ] Score persists after restart
-- [ ] Banner ad appears at bottom
+- [ ] Browser/test banner placeholder appears
 - [ ] Game over shows "Watch ad to continue"
 - [ ] Coin shop opens when tapped
 - [ ] Daily objectives panel toggles
@@ -209,12 +215,13 @@ See **CHECKLIST.md** for complete list.
 
 ## 🎊 You're Ready!
 
-Your game is now a fully native iOS app with:
+The app currently has:
 - ✅ WebKit-powered rendering
-- ✅ Native ad integration
-- ✅ In-app purchases
-- ✅ Persistent storage
-- ✅ Professional monetization
+- ✅ Production-bundled web app
+- ✅ Local persistent storage
+- ⚠️ Native ad integration staged but disabled
+- ⚠️ In-app purchases staged but disabled
+- ⚠️ Production monetization still blocked on bridge, consent, account, and device testing
 
 **Next:** Follow the setup steps in SETUP.md to configure dependencies and start testing!
 

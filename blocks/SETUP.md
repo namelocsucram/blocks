@@ -1,7 +1,17 @@
 # STOKE Game - Xcode Setup Instructions
 
 ## Overview
-This native iOS app wraps the STOKE HTML5 game with native AdMob ads and RevenueCat in-app purchases.
+This native iOS app wraps the bundled STOKE web game in WebKit. Native AdMob and RevenueCat code is present, but the live bridge is currently disabled for runtime stability.
+
+## Current State
+
+- Primary entry point: generated `stoke_files/index.html`.
+- Source entry point: `stoke_files/stoke-app.jsx`.
+- Build command: `npm run build:web --cache /tmp/stoke-npm-cache`.
+- Test command: `npm test --cache /tmp/stoke-npm-cache`.
+- Runtime bridge: `bridgeMode: .disabled` in `ContentView.swift`.
+- Storage: WebView `localStorage` while the bridge is disabled.
+- Native ads/purchases: blocked until `NativeBridgeMode.storageAndMonetization` is safely re-enabled and tested.
 
 ## Setup Steps
 
@@ -58,17 +68,17 @@ Add the following keys to your `Info.plist`:
 </array>
 
 <key>NSUserTrackingUsageDescription</key>
-<string>This app uses your data to deliver personalized ads</string>
+<string>Allow tracking to help show ads that are more relevant to you and support STOKE.</string>
 
 <key>UIViewControllerBasedStatusBarAppearance</key>
 <false/>
 ```
 
-### 3. Add HTML File to Project
+### 3. Verify Web Bundle Resources
 
-1. Drag `stoke.html` into your Xcode project
-2. Make sure "Copy items if needed" is checked
-3. Verify it's included in the app target
+1. Run `npm run build:web --cache /tmp/stoke-npm-cache`
+2. Verify `stoke_files/index.html` and `stoke_files/stoke.html` are included in the app target
+3. Verify `PrivacyInfo.xcprivacy` is included in the app target
 
 ### 4. Configure App Transport Security (for development)
 
@@ -124,11 +134,10 @@ blocks/
 
 ## Features
 
-✅ Native AdMob banner at bottom
-✅ Interstitial ads every 3 games
-✅ Rewarded video to continue after game over
-✅ In-app purchases for coins
-✅ Persistent storage (UserDefaults)
+⚠️ Native AdMob bridge staged, currently disabled
+⚠️ Native RevenueCat bridge staged, currently disabled
+✅ Browser/test banner, interstitial, rewarded-rescue, and coin-pack flows
+✅ Persistent storage via WebView localStorage
 ✅ Daily objectives system
 ✅ Streak tracking
 
@@ -150,9 +159,12 @@ GADMobileAds.sharedInstance().requestConfiguration.testDeviceIdentifiers = ["YOU
 
 - [ ] Replace RevenueCat test key with production key
 - [ ] Remove NSAllowsArbitraryLoads from Info.plist
+- [ ] Re-enable safe native bridge mode without WebKit message-handler crashes
+- [ ] Add/verify UMP consent before ad requests
 - [ ] Test all ad placements on real device
 - [ ] Test all IAP flows in sandbox
 - [ ] Add privacy policy URL
+- [ ] Review App Privacy labels against final AdMob, UMP, RevenueCat, and first-party storage behavior
 - [ ] Configure App Tracking Transparency
 - [ ] Submit for App Review
 

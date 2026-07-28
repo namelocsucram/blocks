@@ -243,8 +243,8 @@
 		</dict>
 	</array>
 	
-	<!-- App Tracking Transparency -->
-	<key>NSUserTrackingUsageDescription</key>
-	<string>This helps us show you more relevant ads and improve your experience</string>
-</dict>
+		<!-- App Tracking Transparency -->
+		<key>NSUserTrackingUsageDescription</key>
+		<string>Allow tracking to help show ads that are more relevant to you and support STOKE.</string>
+	</dict>
 </plist>

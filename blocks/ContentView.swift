@@ -10,6 +10,30 @@ import WebKit
 import Combine
 import RevenueCat
 
+enum NativeBridgeMode {
+    case disabled
+    case storageOnly
+    case storageAndMonetization
+    
+    var includesStorage: Bool {
+        switch self {
+        case .storageOnly, .storageAndMonetization:
+            return true
+        case .disabled:
+            return false
+        }
+    }
+    
+    var includesMonetization: Bool {
+        switch self {
+        case .storageAndMonetization:
+            return true
+        case .disabled, .storageOnly:
+            return false
+        }
+    }
+}
+
 struct ContentView: View {
     @StateObject private var messageHandler = WebViewMessageHandler()
     @State private var webView: WKWebView?
@@ -26,7 +50,7 @@ struct ContentView: View {
                     htmlFileName: "index",
                     messageHandler: messageHandler,
                     webView: $webView,
-                    isNativeBridgeEnabled: false
+                    bridgeMode: .disabled
                 )
                 .ignoresSafeArea()
             }
@@ -58,7 +82,7 @@ struct WebViewContainer: UIViewRepresentable {
     let htmlFileName: String
     let messageHandler: WebViewMessageHandler
     @Binding var webView: WKWebView?
-    let isNativeBridgeEnabled: Bool
+    let bridgeMode: NativeBridgeMode
     
     func makeCoordinator() -> Coordinator {
         Coordinator(messageHandler: messageHandler)
@@ -68,8 +92,10 @@ struct WebViewContainer: UIViewRepresentable {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         
-        if isNativeBridgeEnabled {
+        if bridgeMode.includesStorage {
             config.userContentController.add(context.coordinator, name: "storage")
+        }
+        if bridgeMode.includesMonetization {
             config.userContentController.add(context.coordinator, name: "admobAction")
             config.userContentController.add(context.coordinator, name: "purchaseAction")
         }
@@ -79,102 +105,8 @@ struct WebViewContainer: UIViewRepresentable {
         webView.isOpaque = false
         webView.backgroundColor = .clear
         
-        if isNativeBridgeEnabled {
-            let bridgeScript = """
-        function postNative(handlerName, payload) {
-            try {
-                const jsonPayload = JSON.stringify(payload || {});
-                webkit.messageHandlers[handlerName].postMessage({ json: jsonPayload });
-            } catch (error) {
-                console.warn('Native bridge post failed', handlerName, error);
-            }
-        }
-        
-        window.Capacitor = {
-            isNativePlatform: () => true,
-            Plugins: {}
-        };
-        
-        // AdMob bridge
-        window.Capacitor.Plugins.AdMob = {
-            initialize: () => {
-                postNative('admobAction', { action: 'initialize' });
-                return Promise.resolve();
-            },
-            showBanner: (options) => {
-                postNative('admobAction', { action: 'showBanner', options });
-                return Promise.resolve();
-            },
-            removeBanner: () => {
-                postNative('admobAction', { action: 'removeBanner' });
-                return Promise.resolve();
-            },
-            prepareInterstitial: (options) => {
-                postNative('admobAction', { action: 'prepareInterstitial', options });
-                return Promise.resolve();
-            },
-            showInterstitial: () => {
-                postNative('admobAction', { action: 'showInterstitial' });
-                return Promise.resolve();
-            },
-            prepareRewardVideoAd: (options) => {
-                postNative('admobAction', { action: 'prepareRewardVideoAd', options });
-                return Promise.resolve();
-            },
-            showRewardVideoAd: () => {
-                return new Promise((resolve, reject) => {
-                    window.rewardedAdCallbacks = { resolve, reject };
-                    postNative('admobAction', { action: 'showRewardVideoAd' });
-                });
-            },
-            addListener: (eventName, callback) => {
-                window.admobListeners = window.admobListeners || {};
-                window.admobListeners[eventName] = callback;
-            }
-        };
-        
-        // RevenueCat bridge
-        window.Capacitor.Plugins.Purchases = {
-            configure: () => {
-                postNative('purchaseAction', { action: 'configure' });
-                return Promise.resolve();
-            },
-            getOfferings: () => {
-                return new Promise((resolve, reject) => {
-                    window.offeringsCallback = resolve;
-                    window.offeringsErrorCallback = reject;
-                    postNative('purchaseAction', { action: 'getOfferings' });
-                });
-            },
-            purchasePackage: (options) => {
-                return new Promise((resolve, reject) => {
-                    const packageId = options && options.aPackage && options.aPackage.identifier;
-                    if (!packageId) {
-                        reject(new Error('Missing package identifier'));
-                        return;
-                    }
-                    window.purchaseCallbacks = { resolve, reject };
-                    postNative('purchaseAction', { action: 'purchasePackage', packageId });
-                });
-            }
-        };
-        
-        // Storage bridge
-        window.storage = {
-            get: (key) => {
-                return new Promise((resolve) => {
-                    window.storageCallbacks = window.storageCallbacks || {};
-                    window.storageCallbacks[key] = resolve;
-                    postNative('storage', { action: 'get', key });
-                });
-            },
-            set: (key, value) => {
-                postNative('storage', { action: 'set', key, value });
-                return Promise.resolve();
-            }
-        };
-        """
-        
+        let bridgeScript = Self.bridgeScript(for: bridgeMode)
+        if !bridgeScript.isEmpty {
             let script = WKUserScript(source: bridgeScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
             config.userContentController.addUserScript(script)
         }
@@ -197,6 +129,103 @@ struct WebViewContainer: UIViewRepresentable {
     
     func updateUIView(_ uiView: WKWebView, context: Context) {
         // No updates needed
+    }
+
+    private static func bridgeScript(for mode: NativeBridgeMode) -> String {
+        var scripts: [String] = []
+
+        if mode.includesStorage {
+            scripts.append("""
+            (function () {
+                function postNative(handlerName, payload) {
+                    try {
+                        const target = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[handlerName];
+                        if (!target) return false;
+                        target.postMessage(JSON.stringify(payload || {}));
+                        return true;
+                    } catch (error) {
+                        console.warn('Native bridge post failed', handlerName, error);
+                        return false;
+                    }
+                }
+
+                window.storage = {
+                    get: (key) => {
+                        return new Promise((resolve) => {
+                            const storageKey = String(key || '');
+                            if (!storageKey) { resolve({}); return; }
+                            window.storageCallbacks = window.storageCallbacks || {};
+                            window.storageCallbacks[storageKey] = resolve;
+                            if (!postNative('storage', { action: 'get', key: storageKey })) resolve({});
+                        });
+                    },
+                    set: (key, value) => {
+                        const storageKey = String(key || '');
+                        if (!storageKey) return Promise.resolve();
+                        postNative('storage', { action: 'set', key: storageKey, value: String(value || '') });
+                        return Promise.resolve();
+                    }
+                };
+            })();
+            """)
+        }
+
+        if mode.includesMonetization {
+            scripts.append("""
+            (function () {
+                function postNative(handlerName, payload) {
+                    try {
+                        const target = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[handlerName];
+                        if (!target) return false;
+                        target.postMessage(JSON.stringify(payload || {}));
+                        return true;
+                    } catch (error) {
+                        console.warn('Native bridge post failed', handlerName, error);
+                        return false;
+                    }
+                }
+
+                window.Capacitor = {
+                    isNativePlatform: () => true,
+                    Plugins: window.Capacitor?.Plugins || {}
+                };
+
+                window.Capacitor.Plugins.AdMob = {
+                    initialize: () => Promise.resolve(postNative('admobAction', { action: 'initialize' })),
+                    showBanner: (options) => Promise.resolve(postNative('admobAction', { action: 'showBanner', options })),
+                    removeBanner: () => Promise.resolve(postNative('admobAction', { action: 'removeBanner' })),
+                    prepareInterstitial: (options) => Promise.resolve(postNative('admobAction', { action: 'prepareInterstitial', options })),
+                    showInterstitial: () => Promise.resolve(postNative('admobAction', { action: 'showInterstitial' })),
+                    prepareRewardVideoAd: (options) => Promise.resolve(postNative('admobAction', { action: 'prepareRewardVideoAd', options })),
+                    showRewardVideoAd: () => new Promise((resolve, reject) => {
+                        window.rewardedAdCallbacks = { resolve, reject };
+                        if (!postNative('admobAction', { action: 'showRewardVideoAd' })) reject(new Error('Ad bridge unavailable'));
+                    }),
+                    addListener: (eventName, callback) => {
+                        window.admobListeners = window.admobListeners || {};
+                        window.admobListeners[eventName] = callback;
+                    }
+                };
+
+                window.Capacitor.Plugins.Purchases = {
+                    configure: () => Promise.resolve(postNative('purchaseAction', { action: 'configure' })),
+                    getOfferings: () => new Promise((resolve, reject) => {
+                        window.offeringsCallback = resolve;
+                        window.offeringsErrorCallback = reject;
+                        if (!postNative('purchaseAction', { action: 'getOfferings' })) reject(new Error('Purchases bridge unavailable'));
+                    }),
+                    purchasePackage: (options) => new Promise((resolve, reject) => {
+                        const packageId = options && options.aPackage && options.aPackage.identifier;
+                        if (!packageId) { reject(new Error('Missing package identifier')); return; }
+                        window.purchaseCallbacks = { resolve, reject };
+                        if (!postNative('purchaseAction', { action: 'purchasePackage', packageId })) reject(new Error('Purchases bridge unavailable'));
+                    })
+                };
+            })();
+            """)
+        }
+
+        return scripts.joined(separator: "\n")
     }
     
     class Coordinator: NSObject, WKScriptMessageHandler {
@@ -222,11 +251,6 @@ struct WebViewContainer: UIViewRepresentable {
         }
         
         private static func messageBodyDictionary(_ body: Any) -> [String: Any]? {
-            if let envelope = body as? [String: Any],
-               let json = envelope["json"] as? String {
-                return dictionary(fromJSON: json)
-            }
-            
             if let dictionary = body as? [String: Any] {
                 return dictionary
             }

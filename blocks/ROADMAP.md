@@ -15,11 +15,11 @@ Focus: make the app's current native wrapper reliable without needing final prod
 - [x] Remove duplicate initialization from SwiftUI view appearance.
 - [x] Document which monetization flows are stubbed versus production-ready.
 
-Phase 1 note: the native JavaScript bridge is disabled by default so the simulator runs the game through browser fallbacks. Re-enable native messaging only after Phase 2/3 replace the bridge with a safer request/response transport.
+Phase 1 note: the broad native JavaScript bridge was disabled to stop WebKit message-handler crashes. Phase 3 attempted a narrower storage-only bridge, but it has been disabled again after simulator instability.
 
 ## Phase 2: Implement Production AdMob
 
-Status: Not started
+Status: Complete
 
 Focus: replace placeholder ad handling with Google Mobile Ads SDK behavior.
 
@@ -32,10 +32,12 @@ Focus: replace placeholder ad handling with Google Mobile Ads SDK behavior.
 
 ## Phase 3: Finish RevenueCat Purchases
 
-Status: Not started
+Status: In progress
 
 Focus: make coin purchases safe, testable, and App Store ready.
 
+- [x] Split native bridge into explicit modes: disabled, storage-only, and storage plus monetization.
+- [ ] Re-enable native storage without activating AdMob or RevenueCat message handlers.
 - [ ] Replace placeholder RevenueCat API key with the production `appl_...` key.
 - [ ] Verify App Store Connect products and RevenueCat offerings for `coins_100`, `coins_350`, `coins_800`, and `coins_2000`.
 - [ ] Return purchase results from Swift with package identifiers and failure reasons.
@@ -48,30 +50,32 @@ Status: Not started
 
 Focus: remove CDN/runtime compilation from the app bundle.
 
-- [ ] Move game logic from inline HTML into source modules.
-- [ ] Build React/JSX ahead of time with a bundler such as Vite or esbuild.
-- [ ] Bundle React, CSS, and game assets locally.
-- [ ] Load built assets from the app bundle without network dependency.
-- [ ] Remove `babel-standalone` and `type="text/babel"` from shipped HTML.
+- [x] Move game logic from inline HTML into source modules.
+- [x] Build React/JSX ahead of time with esbuild.
+- [x] Bundle React and game code locally.
+- [x] Load built app code from the app bundle without CDN script dependencies.
+- [x] Remove `babel-standalone` and `type="text/babel"` from shipped HTML.
 
 ## Phase 5: Test Core Game Logic
 
-Status: Not started
+Status: In progress
 
 Focus: reduce regressions in the puzzle economy and daily systems.
 
-- [ ] Extract placement, line clear, piece draw, streak, goals, and coin economy logic into testable modules.
-- [ ] Add unit coverage for blocked-board detection and line clear scoring.
-- [ ] Add save-data migration tests.
-- [ ] Add smoke UI automation for launch, drag/place, game over, and coin shop open.
+- [x] Extract placement, line clear, piece draw, blocked-board, and scoring logic into a testable module.
+- [x] Add unit coverage for blocked-board detection and line clear scoring.
+- [ ] Extract streak, goals, and coin economy logic into testable modules.
+- [x] Add save-data migration tests.
+- [x] Add smoke UI automation for launch, drag/place, coin shop open, game over, and rewarded-rescue flow.
 
 ## Phase 6: Production Readiness
 
-Status: Not started
+Status: In progress
 
 Focus: prepare the app for TestFlight and App Review.
 
-- [ ] Add privacy manifest and review App Privacy nutrition labels.
+- [x] Add first-party privacy manifest.
+- [ ] Review App Privacy nutrition labels against final AdMob, UMP, RevenueCat, and first-party storage behavior.
 - [ ] Verify ATT/consent messaging and privacy policy URL.
 - [ ] Test on small iPhone, large iPhone, and iPad if supported.
 - [ ] Archive a Release build and run sandbox purchase/ad tests on a real device.

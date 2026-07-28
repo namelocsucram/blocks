@@ -1,34 +1,64 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { Flame, RotateCcw, Volume2, VolumeX, Snowflake, Sparkles, Bomb } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  SIZE,
+  MAX_HEAT,
+  emptyGrid,
+  canPlace,
+  anyPlacement,
+  drawPiece,
+  bombPiece,
+  placePiece,
+  calculatePlacementOutcome,
+  clearingKeysForLines,
+  clearLines,
+} from "./stoke-core.mjs";
+import {
+  todayStr,
+  initializeSaveState,
+} from "./stoke-save.mjs";
 
-const SIZE = 8;
-const MAX_HEAT = 24;
-const GOLD_CHANCE = 0.08;
+async function loadSave(key) {
+  try {
+    if (window.storage) {
+      const res = await window.storage.get(key);
+      if (res && res.value) return JSON.parse(res.value);
+    }
+  } catch (e) {}
+  try {
+    const v = localStorage.getItem(key);
+    if (v) return JSON.parse(v);
+  } catch (e) {}
+  return {};
+}
+function saveData(key, obj) {
+  const json = JSON.stringify(obj);
+  try {
+    if (window.storage) { window.storage.set(key, json).catch(() => {}); return; }
+  } catch (e) {}
+  try { localStorage.setItem(key, json); } catch (e) {}
+}
+
+
+function Icon({ children, size = 16, color = "currentColor", style, ...rest }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style} {...rest}>
+      {children}
+    </svg>
+  );
+}
+const Flame = (props) => <Icon {...props}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></Icon>;
+const RotateCcw = (props) => <Icon {...props}><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></Icon>;
+const Volume2 = (props) => <Icon {...props}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></Icon>;
+const VolumeX = (props) => <Icon {...props}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></Icon>;
+const Snowflake = (props) => <Icon {...props}><line x1="12" y1="2" x2="12" y2="22"/><line x1="4.2" y1="7" x2="19.8" y2="17"/><line x1="4.2" y1="17" x2="19.8" y2="7"/></Icon>;
+const Sparkles = (props) => <Icon {...props}><path d="M12 3v5M12 16v5M4 6l2 2M18 16l2 2M3 12h5M16 12h5M4 18l2-2M18 8l2-2"/></Icon>;
+const Bomb = (props) => <Icon {...props}><circle cx="11" cy="13" r="8"/><path d="M17.5 6.5 20 4M20 4l-1.5-1.5M20 4l1.5 1.5"/></Icon>;
+
 const INTERSTITIAL_EVERY = 3;
 const REROLL_COST = 20;
 const ERASER_COST = 15;
-
-const SHAPES = [
-  [[0, 0]],
-  [[0, 0], [0, 1]],
-  [[0, 0], [1, 0]],
-  [[0, 0], [0, 1], [0, 2]],
-  [[0, 0], [1, 0], [2, 0]],
-  [[0, 0], [0, 1], [0, 2], [0, 3]],
-  [[0, 0], [1, 0], [2, 0], [3, 0]],
-  [[0, 0], [0, 1], [1, 0], [1, 1]],
-  [[0, 0], [0, 1], [0, 2], [1, 0]],
-  [[0, 0], [0, 1], [0, 2], [1, 2]],
-  [[1, 0], [1, 1], [1, 2], [0, 0]],
-  [[1, 0], [1, 1], [1, 2], [0, 2]],
-  [[0, 0], [1, 0], [1, 1], [2, 1]],
-  [[0, 1], [1, 0], [1, 1], [2, 0]],
-  [[0, 0], [0, 1], [0, 2], [1, 1]],
-  [[0, 1], [1, 0], [1, 1], [1, 2]],
-  [[0, 0], [0, 1], [1, 0], [1, 1], [2, 0], [2, 1]],
-];
-const SIMPLE_SHAPES = SHAPES.filter((s) => s.length <= 3);
-const COMPLEX_SHAPES = SHAPES.filter((s) => s.length >= 4);
 
 const PALETTE = [
   [255, 59, 92], [255, 166, 48], [255, 224, 76], [46, 213, 115],
@@ -46,39 +76,6 @@ function shapeDims(shape) {
   shape.forEach(([r, c]) => { w = Math.max(w, c + 1); h = Math.max(h, r + 1); });
   return { w, h };
 }
-function emptyGrid() { return Array.from({ length: SIZE }, () => Array(SIZE).fill(null)); }
-function canPlace(grid, shape, r0, c0) {
-  for (const [dr, dc] of shape) {
-    const r = r0 + dr, c = c0 + dc;
-    if (r < 0 || r >= SIZE || c < 0 || c >= SIZE) return false;
-    if (grid[r][c]) return false;
-  }
-  return true;
-}
-function anyPlacement(grid, shape) {
-  for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) if (canPlace(grid, shape, r, c)) return true;
-  return false;
-}
-
-// --- dynamic difficulty: bias toward simple shapes early, and never hand out
-// a piece that literally cannot fit anywhere on the current board.
-function pickShape(difficultyLevel) {
-  const complexChance = 0.22 + 0.5 * difficultyLevel;
-  const pool = Math.random() < complexChance ? COMPLEX_SHAPES : SIMPLE_SHAPES;
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-function drawPiece(grid, difficultyLevel, id) {
-  let shape = pickShape(difficultyLevel);
-  let tries = 0;
-  while (!anyPlacement(grid, shape) && tries < 6) { shape = pickShape(difficultyLevel); tries++; }
-  if (!anyPlacement(grid, shape)) shape = [[0, 0]];
-  const gold = Math.random() < GOLD_CHANCE;
-  const colorIdx = Math.floor(Math.random() * PALETTE.length);
-  return { id, shape, gold, colorIdx, bomb: false };
-}
-function bombPiece(id) { return { id, shape: [[0, 0]], gold: false, colorIdx: 0, bomb: true }; }
-function todayStr() { return new Date().toDateString(); }
-function daysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
 
 function useDeviceLayout() {
   const readViewport = () => ({
@@ -119,17 +116,16 @@ function useDeviceLayout() {
         : "max(14px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom))",
     },
     title: { fontSize: isCompact ? 28 : isTablet ? 38 : 32 },
-    tagline: { display: isCompact ? "none" : "block" },
-    adBanner: { height: isCompact ? 34 : 44, marginBottom: isCompact ? 6 : 12 },
-    statsRow: { gap: isCompact ? 6 : 8, marginBottom: isCompact ? 6 : 14 },
+    adBanner: { height: isCompact ? 34 : 44, marginBottom: isCompact ? 6 : 8 },
+    statsRow: { gap: isCompact ? 6 : 8, marginBottom: isCompact ? 6 : 8 },
     statBox: { padding: isCompact ? "6px 8px" : "8px 10px" },
     statValue: { fontSize: isCompact ? 16 : 18 },
     grid: { width: boardSize, maxWidth: "100%", margin: "0 auto" },
-    tray: { marginTop: isCompact ? 8 : 18, padding: isCompact ? "8px 8px" : "16px 10px", minHeight: isCompact ? 48 : 70 },
+    tray: { marginTop: isCompact ? 8 : 10, padding: isCompact ? "8px 8px" : "12px 10px", minHeight: isCompact ? 48 : 60 },
     trayCell: { size: isCompact ? 12 : 14, gap: isCompact ? 1.5 : 2 },
     boosterBar: {
       gap: isCompact ? 6 : 8,
-      marginTop: isCompact ? 8 : 10,
+      marginTop: isCompact ? 8 : 6,
       marginBottom: isCompact ? 10 : 0,
       position: "static",
       paddingBottom: 0,
@@ -137,25 +133,6 @@ function useDeviceLayout() {
     boosterBtn: { padding: isCompact ? "7px 5px" : "9px 6px", fontSize: isCompact ? 10.5 : 11.5 },
     overlayCard: { width: isCompact ? "92%" : "84%", padding: isCompact ? "20px 18px" : "26px 28px" },
   };
-}
-
-// --- daily objectives: 3 rotating micro-goals, refreshed once per calendar day.
-// Deliberately skill-agnostic accumulation goals (not authored puzzle boards) so
-// they can't be "too hard" the way a hand-built level can.
-const GOAL_TEMPLATES = [
-  { type: "lines", label: (t) => `Clear ${t} lines`, targets: [8, 15, 25], reward: 25 },
-  { type: "score", label: (t) => `Score ${t} points`, targets: [500, 1200, 2500], reward: 30 },
-  { type: "jackpot", label: (t) => `Hit ${t} Jackpot${t > 1 ? "s" : ""}`, targets: [1, 2], reward: 50 },
-  { type: "heat", label: (t) => `Reach heat ×${(1 + t * 0.125).toFixed(1)}`, targets: [12, 18, 24], reward: 20 },
-  { type: "wildgem", label: (t) => `Place ${t} Wild Gem${t > 1 ? "s" : ""}`, targets: [2, 4], reward: 20 },
-  { type: "pieces", label: (t) => `Place ${t} pieces`, targets: [30, 60], reward: 15 },
-];
-function generateDailyGoals() {
-  const shuffled = [...GOAL_TEMPLATES].sort(() => Math.random() - 0.5).slice(0, 3);
-  return shuffled.map((tmpl, i) => {
-    const target = tmpl.targets[Math.floor(Math.random() * tmpl.targets.length)];
-    return { id: `${tmpl.type}-${i}-${Date.now()}`, type: tmpl.type, target, progress: 0, reward: tmpl.reward, claimed: false, label: tmpl.label(target) };
-  });
 }
 
 let idCounter = 1;
@@ -325,7 +302,7 @@ function shareJackpotCard(score, multiplier) {
   }, "image/png");
 }
 
-export default function Stoke() {
+function Stoke() {
   const [grid, setGrid] = useState(emptyGrid);
   const [tray, setTray] = useState(() => [drawPiece(emptyGrid(), 0, idCounter++), drawPiece(emptyGrid(), 0, idCounter++), drawPiece(emptyGrid(), 0, idCounter++)]);
   const [score, setScore] = useState(0);
@@ -369,48 +346,20 @@ export default function Stoke() {
 
   useEffect(() => {
     (async () => {
-      let save = { best: 0, sfxMuted: false, musicMuted: false, streak: 1, lastPlayDate: null, freezeAvailable: false, coins: 0, dailyGoals: [], goalsDate: null };
-      try {
-        const res = await window.storage.get("stoke-save");
-        if (res && res.value) save = { ...save, ...JSON.parse(res.value) };
-      } catch (e) {}
+      const save = await loadSave("stoke-save");
+      const initialized = initializeSaveState(save);
 
-      // Migrate old single "muted" saves so returning players don't get reset to sound-on.
-      if (save.muted !== undefined && save.sfxMuted === undefined) {
-        save.sfxMuted = save.muted;
-        save.musicMuted = save.muted;
-      }
+      setBest(initialized.best);
+      setSfxMuted(initialized.sfxMuted);
+      setMusicMuted(initialized.musicMuted);
+      setStreak(initialized.streak);
+      setFreezeAvailable(initialized.freezeAvailable);
+      setCoins(initialized.coins);
+      setHeat(initialized.initialHeat);
+      setDailyGoals(initialized.dailyGoals);
+      setGoalsDate(initialized.goalsDate);
 
-      let newStreak = save.streak || 1;
-      let newFreeze = !!save.freezeAvailable;
-      const today = todayStr();
-      if (save.lastPlayDate && save.lastPlayDate !== today) {
-        const gap = daysBetween(save.lastPlayDate, today);
-        if (gap === 1) newStreak = (save.streak || 1) + 1;
-        else if (gap > 1) { if (newFreeze) newFreeze = false; else newStreak = 1; }
-      }
-      if (newStreak > 0 && newStreak % 7 === 0) newFreeze = true;
-
-      let newGoals = save.dailyGoals && save.dailyGoals.length ? save.dailyGoals : generateDailyGoals();
-      let newGoalsDate = save.goalsDate;
-      if (newGoalsDate !== today) {
-        newGoals = generateDailyGoals();
-        newGoalsDate = today;
-      }
-
-      setBest(save.best || 0);
-      setSfxMuted(!!save.sfxMuted);
-      setMusicMuted(!!save.musicMuted);
-      setStreak(newStreak);
-      setFreezeAvailable(newFreeze);
-      setCoins(save.coins || 0);
-      setHeat(Math.min(newStreak - 1, 5));
-      setDailyGoals(newGoals);
-      setGoalsDate(newGoalsDate);
-
-      window.storage.set("stoke-save", JSON.stringify({
-        best: save.best || 0, sfxMuted: !!save.sfxMuted, musicMuted: !!save.musicMuted, streak: newStreak, lastPlayDate: today, freezeAvailable: newFreeze, coins: save.coins || 0, dailyGoals: newGoals, goalsDate: newGoalsDate,
-      })).catch(() => {});
+      saveData("stoke-save", initialized.persisted);
       setLoaded(true);
     })();
   }, []);
@@ -419,10 +368,8 @@ export default function Stoke() {
     if (!loaded) return;
     const newBest = Math.max(best, score);
     if (newBest !== best) setBest(newBest);
-    window.storage.set("stoke-save", JSON.stringify({
-      best: newBest, sfxMuted, musicMuted, streak, lastPlayDate: todayStr(), freezeAvailable, coins, dailyGoals, goalsDate,
-    })).catch(() => {});
-  }, [score, sfxMuted, musicMuted, loaded, coins, dailyGoals]);
+    saveData("stoke-save", { best: newBest, sfxMuted, musicMuted, streak, lastPlayDate: todayStr(), freezeAvailable, coins, dailyGoals, goalsDate });
+  }, [score, sfxMuted, musicMuted, loaded, coins, dailyGoals, streak, freezeAvailable, goalsDate, best]);
 
   useEffect(() => {
     if (!showInterstitial) return;
@@ -509,6 +456,22 @@ export default function Stoke() {
     const plugins = getCapPlugins();
     if (!isNative() || !plugins || !plugins.Purchases) return;
     plugins.Purchases.configure().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!window.__STOKE_TEST__) return;
+    const forceGameOver = () => {
+      const filledGrid = Array.from({ length: SIZE }, (_, r) => (
+        Array.from({ length: SIZE }, (_, c) => ({ colorIdx: (r + c) % PALETTE.length, gold: false }))
+      ));
+      setGrid(filledGrid);
+      setTray([drawPiece(filledGrid, 0, idCounter++)]);
+      setGameOver(true);
+      setRescueUsed(false);
+      setShowInterstitial(false);
+    };
+    window.addEventListener("stoke:test:forceGameOver", forceGameOver);
+    return () => window.removeEventListener("stoke:test:forceGameOver", forceGameOver);
   }, []);
 
   const updateCellSize = useCallback(() => {
@@ -711,38 +674,26 @@ export default function Stoke() {
   function commitPlacement(piece, r0, c0) {
     if (piece.bomb) { detonateBomb(); return; }
 
-    const newGrid = grid.map((row) => row.slice());
-    piece.shape.forEach(([dr, dc]) => { newGrid[r0 + dr][c0 + dc] = { colorIdx: piece.colorIdx, gold: piece.gold }; });
+    const newGrid = placePiece(grid, piece, r0, c0);
+    if (!newGrid) { sound.invalid(); return; }
 
-    const fullRows = [];
-    for (let r = 0; r < SIZE; r++) if (newGrid[r].every((c) => c)) fullRows.push(r);
-    const fullCols = [];
-    for (let c = 0; c < SIZE; c++) if (newGrid.every((row) => row[c])) fullCols.push(c);
-    const linesCleared = fullRows.length + fullCols.length;
-
-    let newHeat;
-    if (linesCleared > 0) {
-      const gain = linesCleared * (linesCleared + 1);
-      newHeat = Math.min(heat + gain + (piece.gold ? 3 : 0), MAX_HEAT);
-    } else {
-      newHeat = Math.max(heat - Math.max(1, Math.round(heat / 12)), 0);
-      if (piece.gold) newHeat = Math.min(newHeat + 3, MAX_HEAT);
-    }
-
-    const comboNext = linesCleared > 0 ? combo + 1 : 0;
-    const comboMultiplier = 1 + Math.min(comboNext, 8) * 0.15;
-    const lineBurstMultiplier = linesCleared > 1 ? 1 + (linesCleared - 1) * 0.35 : 1;
-    const multiplier = 1 + newHeat * 0.125;
-    const placementPts = piece.shape.length * (piece.gold ? 6 : 2);
-    const clearPts = linesCleared > 0 ? Math.round(linesCleared * SIZE * 10 * multiplier * comboMultiplier * lineBurstMultiplier) : 0;
-    const approxScore = score + placementPts + clearPts;
+    const {
+      fullRows,
+      fullCols,
+      linesCleared,
+      newHeat,
+      comboNext,
+      placementPts,
+      clearPts,
+      approxScore,
+      coinBonus,
+    } = calculatePlacementOutcome({ grid: newGrid, piece, heat, combo, score });
 
     setHeat(newHeat);
     if (newHeat > heat) setPulse((p) => p + 1);
     setScore((s) => s + placementPts + clearPts);
     setCombo(comboNext);
     if (linesCleared > 0) {
-      const coinBonus = linesCleared + Math.floor(comboNext / 3);
       setCoins((c) => c + coinBonus);
       setComboPop({ id: Date.now(), text: comboNext > 1 ? `${comboNext}x combo +${clearPts}` : `Line clear +${clearPts}` });
       if (linesCleared > 1 || comboNext >= 3) setShake(true);
@@ -772,18 +723,11 @@ export default function Stoke() {
     if (justHitMax) setBombArmed(true);
 
     if (linesCleared > 0) {
-      const keys = [];
-      fullRows.forEach((r) => { for (let c = 0; c < SIZE; c++) keys.push(`${r}-${c}`); });
-      fullCols.forEach((c) => { for (let r = 0; r < SIZE; r++) keys.push(`${r}-${c}`); });
+      const keys = clearingKeysForLines(fullRows, fullCols);
       setClearingKeys(keys);
       sound.clear(linesCleared, newHeat);
       setTimeout(() => {
-        setGrid((g) => {
-          const cleared = g.map((row) => row.slice());
-          fullRows.forEach((r) => { for (let c = 0; c < SIZE; c++) cleared[r][c] = null; });
-          fullCols.forEach((c) => { for (let r = 0; r < SIZE; r++) cleared[r][c] = null; });
-          return cleared;
-        });
+        setGrid((g) => clearLines(g, fullRows, fullCols));
         setClearingKeys([]);
       }, 220);
       setGrid(newGrid);
@@ -876,7 +820,6 @@ export default function Stoke() {
           )}
           <span style={S.streakBadge}>🪙 {coins}</span>
         </div>
-        <p style={{ ...S.tagline, ...deviceLayout.tagline }}>Clear lines to build heat. Max it out for a JACKPOT bomb that clears the board.</p>
       </div>
 
       <div style={{ ...S.adBanner, ...deviceLayout.adBanner }}>{isNative() ? "Live ad banner (AdMob)" : "Ad banner placeholder · 320×50 — real in native build"}</div>
@@ -983,7 +926,7 @@ export default function Stoke() {
         })}
       </div>
 
-      <div style={{ ...S.boosterBar, ...deviceLayout.boosterBar }}>
+      <div className="booster-bar-sticky" style={{ ...S.boosterBar, ...deviceLayout.boosterBar }}>
         <button className="booster-btn" style={{ ...S.boosterBtn, ...deviceLayout.boosterBtn, opacity: coins < REROLL_COST ? 0.5 : 1 }} onClick={rerollTray} disabled={coins < REROLL_COST}>
           🔄 Reroll<span style={S.boosterCost}>{REROLL_COST}🪙</span>
         </button>
@@ -1076,13 +1019,13 @@ const S = {
     background: "radial-gradient(ellipse at top, #241238 0%, #12081F 60%, #0A0512 100%)",
     color: "#F3ECE3",
     minHeight: "100%",
-    padding: "20px 16px 32px",
+    padding: "10px 16px 10px",
     maxWidth: 460,
     margin: "0 auto",
     position: "relative",
     userSelect: "none",
   },
-  header: { marginBottom: 12 },
+  header: { marginBottom: 6 },
   titleRow: { display: "flex", alignItems: "center", justifyContent: "space-between" },
   title: {
     fontFamily: "'Baloo 2', sans-serif", fontWeight: 800, fontSize: 32, letterSpacing: "0.02em", margin: 0,
@@ -1098,7 +1041,7 @@ const S = {
   adBanner: {
     height: 44, borderRadius: 6, border: "1px dashed #4A2E66", background: "#1A0F2A",
     color: "#6E5F8C", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center",
-    letterSpacing: "0.04em", marginBottom: 12,
+    letterSpacing: "0.04em", marginBottom: 8,
   },
   goalsToggle: {
     width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -1122,7 +1065,7 @@ const S = {
     cursor: "pointer", whiteSpace: "nowrap",
   },
   goalClaimed: { fontSize: 10.5, color: "#4ADE80", whiteSpace: "nowrap" },
-  statsRow: { display: "flex", gap: 8, marginBottom: 14 },
+  statsRow: { display: "flex", gap: 8, marginBottom: 8 },
   statBox: { flex: 1, background: "#1E1030", border: "1px solid #4A2E66", borderRadius: 6, padding: "8px 10px" },
   statLabel: { fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "#B7A4D8", marginBottom: 4 },
   statValue: { fontSize: 18, fontWeight: 700, color: "#FFF3C4" },
@@ -1145,10 +1088,10 @@ const S = {
     background: "linear-gradient(135deg, #FFD65A, #FF8A3D)", color: "#2A1B08", border: "none", borderRadius: 20,
     padding: "8px 16px", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 12, cursor: "pointer",
   },
-  tray: { display: "flex", justifyContent: "space-around", alignItems: "center", marginTop: 18, background: "#1E1030", border: "1px solid #4A2E66", borderRadius: 8, padding: "16px 10px", minHeight: 70 },
+  tray: { display: "flex", justifyContent: "space-around", alignItems: "center", marginTop: 10, background: "#1E1030", border: "1px solid #4A2E66", borderRadius: 8, padding: "12px 10px", minHeight: 60 },
   trayPiece: { padding: 6, cursor: "grab", position: "relative" },
   goldIcon: { position: "absolute", top: -2, right: -2 },
-  boosterBar: { display: "flex", gap: 8, marginTop: 10 },
+  boosterBar: { display: "flex", gap: 8, marginTop: 6 },
   boosterBtn: {
     flex: 1, background: "#1E1030", border: "1px solid #4A2E66", borderRadius: 6, padding: "9px 6px",
     color: "#F3ECE3", fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, fontWeight: 600, cursor: "pointer",
@@ -1182,3 +1125,5 @@ const S = {
   rescueBtn: { display: "block", width: "100%", background: "#2E5A66", color: "#EAF7FA", border: "1px solid #3E7684", borderRadius: 6, padding: "10px 14px", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 12, letterSpacing: "0.02em", cursor: "pointer", marginBottom: 10 },
   restartBtn: { display: "inline-flex", alignItems: "center", gap: 6, background: "linear-gradient(135deg, #FFD65A, #FF8A3D)", color: "#2A1B08", border: "none", borderRadius: 6, padding: "9px 16px", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 12.5, letterSpacing: "0.05em", textTransform: "uppercase", cursor: "pointer" },
 };
+
+createRoot(document.getElementById("root")).render(<Stoke />);

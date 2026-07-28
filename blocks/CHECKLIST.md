@@ -4,11 +4,16 @@ Use this checklist to ensure everything is set up correctly.
 
 ## Current Implementation Status
 
-- Native bridge: disabled by default for stability; the WebView currently runs with browser fallbacks.
+- Native bridge: disabled again after simulator instability with `NativeBridgeMode.storageOnly`.
 - Storage: uses WebView `localStorage` while the native bridge is disabled.
-- RevenueCat bridge: guarded, but inactive until the bridge is re-enabled and `PurchaseManager` has a production `appl_...` key.
-- AdMob bridge: inactive until Phase 2 implements Google Mobile Ads with a safer bridge transport.
-- Web app bundling: still prototype-style HTML with CDN React and runtime Babel until Phase 4.
+- RevenueCat bridge: still inactive; monetization handlers remain disabled until `NativeBridgeMode.storageAndMonetization` is ready and `PurchaseManager` has a production `appl_...` key.
+- AdMob bridge: still inactive until Google Mobile Ads is wired through the safer bridge mode.
+- Web app bundling: production-style HTML generated from `stoke_files/stoke-app.jsx` with local React/esbuild output; no CDN React or runtime Babel in shipped HTML.
+- Core game tests: `node:test` coverage now exercises placement validation, blocked-board detection, line clearing, piece fallback, heat/combo scoring, and gold-piece scoring via `stoke_files/stoke-core.mjs`.
+- Save migration tests: `node:test` coverage now exercises old `muted` save migration, streak rollover/reset, streak-freeze use, and daily-goal refresh via `stoke_files/stoke-save.mjs`.
+- Web smoke tests: `node:test` plus `happy-dom` now renders the generated app bundle and checks launch, board/tray render, daily objectives, coin shop, drag placement, game over, and rewarded-rescue flow.
+- Privacy manifest: first-party `PrivacyInfo.xcprivacy` is present and declares no first-party collection/tracking while the bridge remains disabled and gameplay data stays local.
+- Production blockers: App Privacy labels, privacy policy URL, AdMob/UMP behavior, RevenueCat production key, App Store Connect products, and real-device sandbox tests still need final verification before TestFlight.
 
 ## ✅ Initial Setup
 
@@ -30,6 +35,7 @@ Use this checklist to ensure everything is set up correctly.
   - [ ] `SKAdNetworkItems` array added
   - [ ] `NSUserTrackingUsageDescription` added
   - [ ] `UIViewControllerBasedStatusBarAppearance` set to `NO`
+  - [ ] Privacy policy URL finalized for App Store metadata
 
 ## ✅ Code Integration
 
@@ -146,7 +152,8 @@ Use this checklist to ensure everything is set up correctly.
 
 - [ ] **Compliance**
   - [ ] App Tracking Transparency implemented
-  - [ ] Privacy manifest included (if needed)
+  - [x] First-party privacy manifest included
+  - [ ] App Privacy labels reviewed against AdMob, UMP, RevenueCat, and first-party local storage behavior
   - [ ] Age rating appropriate
   - [ ] Content complies with App Store guidelines
 

@@ -1,10 +1,12 @@
 # JavaScript ↔ Native Bridge API Reference
 
-This document describes how the HTML game communicates with native iOS features.
+This document describes the inactive JavaScript/native bridge contract.
 
 ## Overview
 
 The bridge works by injecting JavaScript objects (`window.Capacitor`, `window.storage`) that send messages to Swift code via WebKit's message handlers. Responses come back via JavaScript callbacks.
+
+Current runtime status: `ContentView.swift` uses `bridgeMode: .disabled`, so none of these bridge APIs are active in the shipped app right now. The web app falls back to WebView `localStorage` and browser/test monetization behavior until a safe native bridge mode is re-enabled and tested.
 
 ## Storage API
 
@@ -176,19 +178,17 @@ All purchase methods are accessed via `window.Capacitor.Plugins.Purchases`.
 
 ### `configure(options)`
 
-Configures the RevenueCat SDK. Called automatically on app launch.
+Configures the RevenueCat SDK. In the current architecture, the production API key must stay owned by Swift in `PurchaseManager.swift`; JavaScript must not provide or override it.
 
 **Parameters:**
 - `options` (object)
-  - `apiKey` (string) - RevenueCat API key
+  - No runtime API key parameter is accepted in production. Swift owns SDK configuration.
 
 **Returns:** Promise<void>
 
 **Example:**
 ```javascript
-await window.Capacitor.Plugins.Purchases.configure({
-  apiKey: "appl_XXXXXX"
-});
+await window.Capacitor.Plugins.Purchases.configure();
 ```
 
 ### `getOfferings()`
