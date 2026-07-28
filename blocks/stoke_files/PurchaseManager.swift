@@ -6,15 +6,14 @@
 //
 
 import Foundation
-import Combine
 import RevenueCat
 
 class PurchaseManager: NSObject {
     static let shared = PurchaseManager()
     
-    // Test API key from the HTML file
-    // Replace with production key: appl_... when ready
-    private let apiKey = "test_TikeKfmfcUbcOAEWUZyfPOTKgUc"
+    // Replace with the production public iOS key from RevenueCat: appl_...
+    // Keep this owned by Swift so JavaScript cannot reconfigure the SDK.
+    private let apiKey = "appl_REPLACE_WITH_PRODUCTION_KEY"
     
     var offerings: Offerings?
     
@@ -33,8 +32,13 @@ class PurchaseManager: NSObject {
     }
     
     func configure() {
-        // TODO: Replace apiKey with production appl_... key from RevenueCat dashboard
-        // Disabled until then — test_ keys crash in release builds
+        guard !Purchases.isConfigured else { return }
+        guard apiKey.hasPrefix("appl_"), apiKey != "appl_REPLACE_WITH_PRODUCTION_KEY" else {
+            print("RevenueCat not configured: replace apiKey with your production appl_... key.")
+            return
+        }
+        
+        Purchases.configure(withAPIKey: apiKey)
     }
     
     @objc private func handlePurchaseAction(_ notification: Notification) {
@@ -46,10 +50,14 @@ class PurchaseManager: NSObject {
             configure()
         case "getOfferings":
             fetchOfferings { offerings in
-                NotificationCenter.default.post(
-                    name: .offeringsLoaded,
-                    object: offerings
-                )
+                if let offerings {
+                    NotificationCenter.default.post(
+                        name: .offeringsLoaded,
+                        object: offerings
+                    )
+                } else {
+                    NotificationCenter.default.post(name: .offeringsFailed, object: nil)
+                }
             }
         case "purchasePackage":
             if let packageId = body["packageId"] as? String {
@@ -61,6 +69,12 @@ class PurchaseManager: NSObject {
     }
     
     func fetchOfferings(completion: @escaping (Offerings?) -> Void) {
+        guard Purchases.isConfigured else {
+            print("Cannot fetch offerings: RevenueCat is not configured.")
+            completion(nil)
+            return
+        }
+        
         Purchases.shared.getOfferings { offerings, error in
             if let error = error {
                 print("Failed to fetch offerings: \(error.localizedDescription)")
@@ -74,6 +88,16 @@ class PurchaseManager: NSObject {
     }
     
     func purchasePackage(identifier: String, completion: ((Bool) -> Void)? = nil) {
+        guard Purchases.isConfigured else {
+            print("Cannot purchase package: RevenueCat is not configured.")
+            completion?(false)
+            NotificationCenter.default.post(
+                name: .purchaseFailed,
+                object: PurchaseManagerError.notConfigured
+            )
+            return
+        }
+        
         guard let offerings = offerings,
               let package = offerings.current?.availablePackages.first(where: { $0.identifier == identifier }) else {
             print("Package not found: \(identifier)")
@@ -107,6 +131,12 @@ class PurchaseManager: NSObject {
     }
     
     func restorePurchases(completion: ((Bool) -> Void)? = nil) {
+        guard Purchases.isConfigured else {
+            print("Cannot restore purchases: RevenueCat is not configured.")
+            completion?(false)
+            return
+        }
+        
         Purchases.shared.restorePurchases { customerInfo, error in
             if let error = error {
                 print("Restore failed: \(error.localizedDescription)")
@@ -120,9 +150,14 @@ class PurchaseManager: NSObject {
     }
 }
 
+enum PurchaseManagerError: Error {
+    case notConfigured
+}
+
 extension Notification.Name {
     static let purchaseAction = Notification.Name("purchaseAction")
     static let offeringsLoaded = Notification.Name("offeringsLoaded")
+    static let offeringsFailed = Notification.Name("offeringsFailed")
     static let purchaseSuccess = Notification.Name("purchaseSuccess")
     static let purchaseFailed = Notification.Name("purchaseFailed")
     static let purchaseCancelled = Notification.Name("purchaseCancelled")

@@ -108,7 +108,6 @@ let idCounter = 1;
 const ADMOB_BANNER_ID = "ca-app-pub-7262617456411456/9508273591";
 const ADMOB_INTERSTITIAL_ID = "ca-app-pub-7262617456411456/6307395181";
 const ADMOB_REWARDED_ID = "ca-app-pub-7262617456411456/7812048544";
-const REVENUECAT_API_KEY = "test_TikeKfmfcUbcOAEWUZyfPOTKgUc"; // Test Store key — swap for the appl_... key once a real Apple app is connected in RevenueCat
 // Matches the products/packages set up in RevenueCat: coins_100/350/800/2000.
 const COIN_PACKAGES = [
   { id: "coins_100", coins: 100, price: "$0.99" },
@@ -434,7 +433,7 @@ export default function Stoke() {
   useEffect(() => {
     const plugins = getCapPlugins();
     if (!isNative() || !plugins || !plugins.Purchases) return;
-    plugins.Purchases.configure({ apiKey: REVENUECAT_API_KEY }).catch(() => {});
+    plugins.Purchases.configure().catch(() => {});
   }, []);
 
   const updateCellSize = useCallback(() => {

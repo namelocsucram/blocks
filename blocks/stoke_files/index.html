@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <title>STOKE</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -10,6 +10,13 @@
 <style>
   html, body { margin: 0; padding: 0; background: #12081F; height: 100%; }
   #root { min-height: 100%; }
+  .booster-bar-sticky {
+    position: sticky;
+    bottom: env(safe-area-inset-bottom, 0px);
+    background: #0A0512;
+    padding-bottom: max(6px, env(safe-area-inset-bottom, 6px));
+    z-index: 10;
+  }
 </style>
 </head>
 <body>
@@ -162,7 +169,6 @@ let idCounter = 1;
 const ADMOB_BANNER_ID = "ca-app-pub-7262617456411456/9508273591";
 const ADMOB_INTERSTITIAL_ID = "ca-app-pub-7262617456411456/6307395181";
 const ADMOB_REWARDED_ID = "ca-app-pub-7262617456411456/7812048544";
-const REVENUECAT_API_KEY = "test_TikeKfmfcUbcOAEWUZyfPOTKgUc"; // Test Store key — swap for the appl_... key once a real Apple app is connected in RevenueCat
 // Matches the products/packages set up in RevenueCat: coins_100/350/800/2000.
 const COIN_PACKAGES = [
   { id: "coins_100", coins: 100, price: "$0.99" },
@@ -480,7 +486,7 @@ function Stoke() {
   useEffect(() => {
     const plugins = getCapPlugins();
     if (!isNative() || !plugins || !plugins.Purchases) return;
-    plugins.Purchases.configure({ apiKey: REVENUECAT_API_KEY }).catch(() => {});
+    plugins.Purchases.configure().catch(() => {});
   }, []);
 
   const updateCellSize = useCallback(() => {
@@ -828,7 +834,6 @@ function Stoke() {
           )}
           <span style={S.streakBadge}>🪙 {coins}</span>
         </div>
-        <p style={S.tagline}>Clear lines to build heat. Max it out for a JACKPOT bomb that clears the board.</p>
       </div>
 
       <div style={S.adBanner}>{isNative() ? "Live ad banner (AdMob)" : "Ad banner placeholder · 320×50 — real in native build"}</div>
@@ -934,7 +939,7 @@ function Stoke() {
         })}
       </div>
 
-      <div style={S.boosterBar}>
+      <div className="booster-bar-sticky" style={S.boosterBar}>
         <button className="booster-btn" style={{ ...S.boosterBtn, opacity: coins < REROLL_COST ? 0.5 : 1 }} onClick={rerollTray} disabled={coins < REROLL_COST}>
           🔄 Reroll<span style={S.boosterCost}>{REROLL_COST}🪙</span>
         </button>
@@ -1027,13 +1032,13 @@ const S = {
     background: "radial-gradient(ellipse at top, #241238 0%, #12081F 60%, #0A0512 100%)",
     color: "#F3ECE3",
     minHeight: "100%",
-    padding: "20px 16px 32px",
+    padding: "10px 16px 10px",
     maxWidth: 460,
     margin: "0 auto",
     position: "relative",
     userSelect: "none",
   },
-  header: { marginBottom: 12 },
+  header: { marginBottom: 6 },
   titleRow: { display: "flex", alignItems: "center", justifyContent: "space-between" },
   title: {
     fontFamily: "'Baloo 2', sans-serif", fontWeight: 800, fontSize: 32, letterSpacing: "0.02em", margin: 0,
@@ -1049,7 +1054,7 @@ const S = {
   adBanner: {
     height: 44, borderRadius: 6, border: "1px dashed #4A2E66", background: "#1A0F2A",
     color: "#6E5F8C", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center",
-    letterSpacing: "0.04em", marginBottom: 12,
+    letterSpacing: "0.04em", marginBottom: 8,
   },
   goalsToggle: {
     width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -1073,7 +1078,7 @@ const S = {
     cursor: "pointer", whiteSpace: "nowrap",
   },
   goalClaimed: { fontSize: 10.5, color: "#4ADE80", whiteSpace: "nowrap" },
-  statsRow: { display: "flex", gap: 8, marginBottom: 14 },
+  statsRow: { display: "flex", gap: 8, marginBottom: 8 },
   statBox: { flex: 1, background: "#1E1030", border: "1px solid #4A2E66", borderRadius: 6, padding: "8px 10px" },
   statLabel: { fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "#B7A4D8", marginBottom: 4 },
   statValue: { fontSize: 18, fontWeight: 700, color: "#FFF3C4" },
@@ -1095,10 +1100,10 @@ const S = {
     background: "linear-gradient(135deg, #FFD65A, #FF8A3D)", color: "#2A1B08", border: "none", borderRadius: 20,
     padding: "8px 16px", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 12, cursor: "pointer",
   },
-  tray: { display: "flex", justifyContent: "space-around", alignItems: "center", marginTop: 18, background: "#1E1030", border: "1px solid #4A2E66", borderRadius: 8, padding: "16px 10px", minHeight: 70 },
+  tray: { display: "flex", justifyContent: "space-around", alignItems: "center", marginTop: 10, background: "#1E1030", border: "1px solid #4A2E66", borderRadius: 8, padding: "12px 10px", minHeight: 60 },
   trayPiece: { padding: 6, cursor: "grab", position: "relative" },
   goldIcon: { position: "absolute", top: -2, right: -2 },
-  boosterBar: { display: "flex", gap: 8, marginTop: 10 },
+  boosterBar: { display: "flex", gap: 8, marginTop: 6 },
   boosterBtn: {
     flex: 1, background: "#1E1030", border: "1px solid #4A2E66", borderRadius: 6, padding: "9px 6px",
     color: "#F3ECE3", fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, fontWeight: 600, cursor: "pointer",

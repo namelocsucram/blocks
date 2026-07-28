@@ -2,6 +2,14 @@
 
 Use this checklist to ensure everything is set up correctly.
 
+## Current Implementation Status
+
+- Native bridge: disabled by default for stability; the WebView currently runs with browser fallbacks.
+- Storage: uses WebView `localStorage` while the native bridge is disabled.
+- RevenueCat bridge: guarded, but inactive until the bridge is re-enabled and `PurchaseManager` has a production `appl_...` key.
+- AdMob bridge: inactive until Phase 2 implements Google Mobile Ads with a safer bridge transport.
+- Web app bundling: still prototype-style HTML with CDN React and runtime Babel until Phase 4.
+
 ## ✅ Initial Setup
 
 - [ ] **Project opened in Xcode**
