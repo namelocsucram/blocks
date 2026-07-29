@@ -741,7 +741,7 @@ function Stoke() {
     if (gameOver || eraseMode) return;
     sound.startMusic();
     e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
     const dims = shapeDims(piece.shape);
     setDrag({ piece, x: e.clientX, y: e.clientY, dims, pointerType: e.pointerType });
   }
@@ -769,6 +769,18 @@ function Stoke() {
     else sound.invalid();
     setDrag(null);
   }
+
+  useEffect(() => {
+    if (!drag) return;
+    window.addEventListener("pointermove", moveDrag);
+    window.addEventListener("pointerup", endDrag);
+    window.addEventListener("pointercancel", endDrag);
+    return () => {
+      window.removeEventListener("pointermove", moveDrag);
+      window.removeEventListener("pointerup", endDrag);
+      window.removeEventListener("pointercancel", endDrag);
+    };
+  }, [drag]);
 
   const preview = getPreview();
   const multiplier = (1 + heat * 0.125).toFixed(2);

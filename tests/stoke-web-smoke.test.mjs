@@ -144,7 +144,7 @@ test("generated app accepts a drag placement onto the board", async () => {
     }));
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    grid.dispatchEvent(event(window, "pointermove", {
+    window.dispatchEvent(event(window, "pointermove", {
       pointerId: 1,
       pointerType: "mouse",
       clientX: 40,
@@ -152,7 +152,7 @@ test("generated app accepts a drag placement onto the board", async () => {
     }));
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    grid.dispatchEvent(event(window, "pointerup", {
+    window.dispatchEvent(event(window, "pointerup", {
       pointerId: 1,
       pointerType: "mouse",
       clientX: 40,
