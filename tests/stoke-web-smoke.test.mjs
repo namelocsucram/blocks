@@ -87,6 +87,46 @@ function visibleFilledCells(document) {
     .filter((cell) => cell.style.background && cell.style.background !== "transparent");
 }
 
+test("generated app keeps the board and controls sized across target viewports", async () => {
+  const viewports = [
+    { name: "iPhone SE", width: 375, height: 667 },
+    { name: "standard iPhone", width: 390, height: 844 },
+    { name: "large iPhone", width: 430, height: 932 },
+    { name: "iPad portrait", width: 768, height: 1024 },
+    { name: "iPad landscape", width: 1024, height: 768 },
+  ];
+
+  for (const viewport of viewports) {
+    const window = await renderApp(viewport);
+    const { document } = window;
+
+    try {
+      const app = document.getElementById("root").firstElementChild;
+      const grid = document.querySelector(".grid-cell")?.parentElement;
+      const tray = document.querySelector(".tray-piece")?.parentElement;
+      const boosters = buttonsWithText(document, "Reroll")[0]?.parentElement;
+
+      assert.ok(app, `${viewport.name} should render the app shell`);
+      assert.ok(grid, `${viewport.name} should render the board`);
+      assert.ok(tray, `${viewport.name} should render the tray`);
+      assert.ok(boosters, `${viewport.name} should render booster controls`);
+      assert.equal(document.querySelectorAll(".grid-cell").length, 64, `${viewport.name} should keep an 8x8 board`);
+      assert.equal(document.querySelectorAll(".tray-piece").length, 3, `${viewport.name} should keep three tray pieces`);
+
+      const boardWidth = Number.parseFloat(grid.style.width);
+      const appMaxWidth = Number.parseFloat(app.style.maxWidth);
+      const viewportGutter = viewport.width < 390 ? 20 : 32;
+
+      assert.ok(boardWidth >= 260, `${viewport.name} board should stay playable`);
+      assert.ok(boardWidth <= viewport.width - viewportGutter || boardWidth <= appMaxWidth, `${viewport.name} board should fit within the viewport shell`);
+      assert.ok(appMaxWidth <= 980, `${viewport.name} app shell should stay constrained`);
+      assert.equal(boosters.style.position, "static", `${viewport.name} boosters should not overlay the game board`);
+    } finally {
+      closeApp(window);
+    }
+  }
+});
+
 test("generated app launches with board, tray, objectives, and coin shop", async () => {
   const window = await renderApp();
   const { document } = window;

@@ -77,7 +77,30 @@ const GOLD = [255, 214, 90];
 function paletteRgb(idx) { return PALETTE[idx % PALETTE.length]; }
 function toRgb(c) { return `rgb(${c[0]}, ${c[1]}, ${c[2]})`; }
 function lighten(c, amt) { return c.map((v) => Math.round(v + (255 - v) * amt)); }
-function gemGradient(c) { return `linear-gradient(135deg, ${toRgb(lighten(c, 0.45))}, ${toRgb(c)})`; }
+function darken(c, amt) { return c.map((v) => Math.round(v * (1 - amt))); }
+function rgba(c, alpha) { return `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha})`; }
+function gemGradient(c) {
+  return [
+    `radial-gradient(circle at 28% 22%, ${rgba(lighten(c, 0.82), 0.95)} 0 10%, transparent 28%)`,
+    `linear-gradient(145deg, ${toRgb(lighten(c, 0.5))} 0%, ${toRgb(c)} 48%, ${toRgb(darken(c, 0.28))} 100%)`,
+  ].join(", ");
+}
+function tileShadow(c, intensity = 1) {
+  return [
+    `0 0 ${Math.round(14 * intensity)}px ${rgba(c, 0.48)}`,
+    `0 ${Math.round(5 * intensity)}px ${Math.round(10 * intensity)}px rgba(0,0,0,0.34)`,
+    "inset 0 1px 0 rgba(255,255,255,0.7)",
+    "inset 0 -3px 5px rgba(0,0,0,0.24)",
+  ].join(", ");
+}
+const AMBIENT_SPARKS = [
+  { left: "9%", top: "13%", size: 3, delay: "0s", duration: "5.2s" },
+  { left: "82%", top: "17%", size: 4, delay: "0.8s", duration: "6.1s" },
+  { left: "18%", top: "58%", size: 2, delay: "1.4s", duration: "4.7s" },
+  { left: "74%", top: "70%", size: 3, delay: "2.1s", duration: "5.8s" },
+  { left: "48%", top: "30%", size: 2, delay: "2.8s", duration: "6.4s" },
+  { left: "61%", top: "88%", size: 4, delay: "3.4s", duration: "5.5s" },
+];
 function createRunStats() {
   return { pieces: 0, lines: 0, jackpots: 0, bestCombo: 0, coinsEarned: 0, missionClaims: 0 };
 }
@@ -873,19 +896,27 @@ function Stoke() {
     <div style={{ ...S.wrap, ...deviceLayout.wrap }}>
       <style>{`
         * { box-sizing: border-box; }
-        .tray-piece:active { transform: scale(0.93); }
-        .grid-cell { transition: background 0.15s ease, box-shadow 0.15s ease; }
+        .tray-piece { transition: transform 0.18s ease, filter 0.18s ease, opacity 0.18s ease; }
+        .tray-piece:active { transform: translateY(3px) scale(0.94); filter: brightness(1.18); }
+        .grid-cell { transition: background 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, transform 0.16s ease, filter 0.16s ease; }
         .booster-btn:active { transform: scale(0.95); }
-        @keyframes flashClear { 0% { transform: scale(1); filter: brightness(1); } 35% { transform: scale(1.2); filter: brightness(2.6); } 100% { transform: scale(0.1); opacity: 0; filter: brightness(3); } }
+        @keyframes flashClear { 0% { transform: scale(1); filter: brightness(1); } 28% { transform: scale(1.24); filter: brightness(3); } 58% { transform: scale(0.82); opacity: 0.88; filter: brightness(2.4); } 100% { transform: scale(0.08) rotate(10deg); opacity: 0; filter: brightness(3); } }
         @keyframes heatPulse { 0% { transform: scaleY(1); } 40% { transform: scaleY(1.6); } 100% { transform: scaleY(1); } }
         @keyframes toastIn { 0% { transform: translate(-50%, 8px); opacity: 0; } 15% { transform: translate(-50%, 0); opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
-        @keyframes goldPulse { 0%,100% { box-shadow: 0 0 4px rgba(255,214,90,0.5); } 50% { box-shadow: 0 0 12px rgba(255,214,90,0.95); } }
+        @keyframes goldPulse { 0%,100% { box-shadow: 0 0 5px rgba(255,214,90,0.55), inset 0 1px 0 rgba(255,255,255,0.8); } 50% { box-shadow: 0 0 16px rgba(255,214,90,0.95), inset 0 1px 0 rgba(255,255,255,0.9); } }
         @keyframes bombPulse { 0%,100% { filter: hue-rotate(0deg) brightness(1.1); } 50% { filter: hue-rotate(180deg) brightness(1.4); } }
-        @keyframes marquee { 0%,100% { box-shadow: 0 0 14px 2px rgba(255,214,90,0.55), inset 0 0 20px rgba(255,214,90,0.12); } 50% { box-shadow: 0 0 22px 4px rgba(255,80,140,0.5), inset 0 0 26px rgba(255,80,140,0.14); } }
+        @keyframes marquee { 0%,100% { box-shadow: 0 0 16px 2px rgba(255,214,90,0.56), 0 18px 44px rgba(0,0,0,0.38), inset 0 0 22px rgba(255,214,90,0.12); } 50% { box-shadow: 0 0 28px 4px rgba(255,80,140,0.5), 0 22px 52px rgba(0,0,0,0.44), inset 0 0 30px rgba(255,80,140,0.14); } }
         @keyframes jackpotZoom { 0% { transform: translate(-50%,-50%) scale(0.4); opacity: 0; } 20% { transform: translate(-50%,-50%) scale(1.15); opacity: 1; } 35% { transform: translate(-50%,-50%) scale(1); opacity: 1; } 80% { opacity: 1; } 100% { transform: translate(-50%,-50%) scale(1); opacity: 0; } }
         @keyframes comboFloat { 0% { transform: translate(-50%, 12px) scale(0.8); opacity: 0; } 18% { transform: translate(-50%, 0) scale(1.08); opacity: 1; } 100% { transform: translate(-50%, -42px) scale(1); opacity: 0; } }
         @keyframes screenShake { 0%,100% { transform: translate(0,0); } 20% { transform: translate(-4px,2px); } 40% { transform: translate(4px,-2px); } 60% { transform: translate(-3px,-1px); } 80% { transform: translate(3px,1px); } }
+        @keyframes emberDrift { 0% { transform: translate3d(0, 16px, 0) scale(0.72); opacity: 0; } 18% { opacity: 0.85; } 100% { transform: translate3d(18px, -46px, 0) scale(1.25); opacity: 0; } }
+        @keyframes validGlow { 0%,100% { filter: brightness(1); transform: scale(1); } 50% { filter: brightness(1.45); transform: scale(1.035); } }
       `}</style>
+      <div style={S.ambientLayer} aria-hidden="true">
+        {AMBIENT_SPARKS.map((spark, i) => (
+          <span key={i} style={{ ...S.ambientSpark, left: spark.left, top: spark.top, width: spark.size, height: spark.size, animationDelay: spark.delay, animationDuration: spark.duration }} />
+        ))}
+      </div>
 
       <div style={S.header}>
         <div style={S.titleRow}>
@@ -979,14 +1010,15 @@ function Stoke() {
           ref={gridRef}
           style={{ ...S.grid, ...deviceLayout.grid, animation: `marquee ${marqueeSpeed}s ease-in-out infinite`, border: eraseMode ? "2px dashed #FF3B5C" : S.grid.border }}
           onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={() => setDrag(null)}
-        >
+        >	  
           {grid.map((row, r) => row.map((cell, c) => {
             const key = `${r}-${c}`;
             const isClearing = clearingKeys.includes(key);
-            let bg = "transparent", glow = "none", border = "1px solid #2A1F3D";
+            let bg = S.emptyCell.background, glow = S.emptyCell.boxShadow, border = S.emptyCell.border;
             if (cell) {
+              const color = cell.gold ? GOLD : paletteRgb(cell.colorIdx);
               bg = cell.gold ? gemGradient(GOLD) : gemGradient(paletteRgb(cell.colorIdx));
-              glow = `0 0 10px ${cell.gold ? toRgb(GOLD) : toRgb(paletteRgb(cell.colorIdx))}77`;
+              glow = tileShadow(color, cell.gold ? 1.2 : 0.9);
               border = "1px solid rgba(255,255,255,0.4)";
             }
             let previewState = null;
@@ -995,10 +1027,11 @@ function Stoke() {
               <div key={key} className="grid-cell" onClick={() => handleCellClick(r, c)} style={{
                 ...S.cell,
                 cursor: eraseMode ? "crosshair" : "default",
-                background: previewState === true ? "#4ADE8055" : previewState === false ? "#FF3B5C66" : bg,
-                boxShadow: previewState == null ? glow : "none",
-                border: previewState != null ? "1px dashed " + (previewState ? "#4ADE80" : "#FF3B5C") : border,
-                animation: isClearing ? "flashClear 0.22s ease-in forwards" : "none",
+                background: previewState === true ? S.validPreview.background : previewState === false ? S.invalidPreview.background : bg,
+                boxShadow: previewState === true ? S.validPreview.boxShadow : previewState === false ? S.invalidPreview.boxShadow : glow,
+                border: previewState != null ? (previewState ? S.validPreview.border : S.invalidPreview.border) : border,
+                transform: previewState === true ? "scale(1.035)" : "scale(1)",
+                animation: isClearing ? "flashClear 0.28s ease-in forwards" : previewState === true ? "validGlow 0.85s ease infinite" : "none",
               }} />
             );
           }))}
@@ -1022,8 +1055,9 @@ function Stoke() {
               <div style={{ display: "grid", gridTemplateColumns: `repeat(${dims.w}, ${deviceLayout.trayCell.size}px)`, gridTemplateRows: `repeat(${dims.h}, ${deviceLayout.trayCell.size}px)`, gap: deviceLayout.trayCell.gap }}>
                 {Array.from({ length: dims.h }).map((_, r) => Array.from({ length: dims.w }).map((_, c) => {
                   const filled = piece.shape.some(([dr, dc]) => dr === r && dc === c);
-                  const bg = piece.bomb ? "linear-gradient(135deg, #444, #111)" : piece.gold ? gemGradient(GOLD) : gemGradient(paletteRgb(piece.colorIdx));
-                  return <div key={`${r}-${c}`} style={{ width: deviceLayout.trayCell.size, height: deviceLayout.trayCell.size, borderRadius: 3, background: filled ? bg : "transparent", boxShadow: filled ? "0 0 6px rgba(0,0,0,0.4)" : "none", animation: filled && piece.gold ? "goldPulse 1.1s ease infinite" : filled && piece.bomb ? "bombPulse 0.9s ease infinite" : "none" }} />;
+                  const color = piece.gold ? GOLD : paletteRgb(piece.colorIdx);
+                  const bg = piece.bomb ? "linear-gradient(135deg, #666, #17121F 62%, #050408)" : piece.gold ? gemGradient(GOLD) : gemGradient(color);
+                  return <div key={`${r}-${c}`} style={{ width: deviceLayout.trayCell.size, height: deviceLayout.trayCell.size, borderRadius: 4, background: filled ? bg : "transparent", border: filled ? "1px solid rgba(255,255,255,0.35)" : "none", boxShadow: filled ? tileShadow(color, 0.55) : "none", animation: filled && piece.gold ? "goldPulse 1.1s ease infinite" : filled && piece.bomb ? "bombPulse 0.9s ease infinite" : "none" }} />;
                 }))}
               </div>
             </div>
@@ -1047,8 +1081,9 @@ function Stoke() {
         <div style={{ position: "fixed", left: drag.x - drag.dims.w * 13, top: drag.y - drag.dims.h * 13 - (drag.pointerType === "touch" ? 70 : 0), pointerEvents: "none", display: "grid", gridTemplateColumns: `repeat(${drag.dims.w}, 26px)`, gridTemplateRows: `repeat(${drag.dims.h}, 26px)`, gap: "3px", zIndex: 50 }}>
           {Array.from({ length: drag.dims.h }).map((_, r) => Array.from({ length: drag.dims.w }).map((_, c) => {
             const filled = drag.piece.shape.some(([dr, dc]) => dr === r && dc === c);
-            const bg = drag.piece.bomb ? "linear-gradient(135deg, #444, #111)" : drag.piece.gold ? gemGradient(GOLD) : gemGradient(paletteRgb(drag.piece.colorIdx));
-            return <div key={`${r}-${c}`} style={{ width: 26, height: 26, borderRadius: 5, background: filled ? bg : "transparent", boxShadow: filled ? "0 0 14px rgba(255,255,255,0.4)" : "none" }} />;
+            const color = drag.piece.gold ? GOLD : paletteRgb(drag.piece.colorIdx);
+            const bg = drag.piece.bomb ? "linear-gradient(135deg, #666, #17121F 62%, #050408)" : drag.piece.gold ? gemGradient(GOLD) : gemGradient(color);
+            return <div key={`${r}-${c}`} style={{ width: 26, height: 26, borderRadius: 6, background: filled ? bg : "transparent", border: filled ? "1px solid rgba(255,255,255,0.45)" : "none", boxShadow: filled ? tileShadow(color, 1.05) : "none" }} />;
           }))}
         </div>
       )}
@@ -1127,7 +1162,12 @@ function Stoke() {
 const S = {
   wrap: {
     fontFamily: "'JetBrains Mono', monospace",
-    background: "radial-gradient(ellipse at top, #241238 0%, #12081F 60%, #0A0512 100%)",
+    background: [
+      "radial-gradient(circle at 50% 18%, rgba(255,214,90,0.12), transparent 23%)",
+      "radial-gradient(circle at 12% 72%, rgba(74,222,128,0.12), transparent 26%)",
+      "radial-gradient(circle at 86% 64%, rgba(255,59,92,0.16), transparent 25%)",
+      "linear-gradient(180deg, #160B24 0%, #0C1322 56%, #07080D 100%)",
+    ].join(", "),
     color: "#F3ECE3",
     minHeight: "100%",
     padding: "10px 16px 10px",
@@ -1135,6 +1175,16 @@ const S = {
     margin: "0 auto",
     position: "relative",
     userSelect: "none",
+    overflow: "hidden",
+    isolation: "isolate",
+  },
+  ambientLayer: { position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none", zIndex: 0 },
+  ambientSpark: {
+    position: "absolute",
+    borderRadius: "50%",
+    background: "radial-gradient(circle, #FFF3C4 0%, #FFD65A 38%, rgba(255,107,107,0.18) 68%, transparent 100%)",
+    boxShadow: "0 0 12px rgba(255,214,90,0.62)",
+    animation: "emberDrift 5.6s linear infinite",
   },
   header: { marginBottom: 6 },
   titleRow: { display: "flex", alignItems: "center", justifyContent: "space-between" },
@@ -1197,9 +1247,34 @@ const S = {
   heatFill: { height: "100%", borderRadius: 4, transition: "width 0.25s ease", background: "linear-gradient(90deg, #FFD65A, #FF6B6B, #FF3B5C)", boxShadow: "0 0 10px rgba(255,107,107,0.7)" },
   grid: {
     display: "grid", gridTemplateColumns: `repeat(${SIZE}, 1fr)`, gridTemplateRows: `repeat(${SIZE}, 1fr)`, gap: "3px",
-    background: "#1E1030", border: "2px solid #FFD65A", borderRadius: 10, padding: "6px", aspectRatio: "1 / 1", touchAction: "none",
+    background: [
+      "linear-gradient(145deg, rgba(255,255,255,0.1), rgba(255,255,255,0) 28%)",
+      "radial-gradient(circle at 50% 0%, rgba(255,214,90,0.13), transparent 42%)",
+      "#171126",
+    ].join(", "),
+    border: "2px solid rgba(255,214,90,0.78)",
+    borderRadius: 10,
+    padding: "7px",
+    aspectRatio: "1 / 1",
+    touchAction: "none",
+    position: "relative",
   },
-  cell: { borderRadius: 4, aspectRatio: "1 / 1" },
+  cell: { borderRadius: 5, aspectRatio: "1 / 1" },
+  emptyCell: {
+    background: "transparent",
+    border: "1px solid rgba(183,164,216,0.14)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -2px 4px rgba(0,0,0,0.22)",
+  },
+  validPreview: {
+    background: "radial-gradient(circle at 35% 28%, rgba(255,255,255,0.36), transparent 32%), linear-gradient(145deg, rgba(74,222,128,0.58), rgba(24,151,88,0.72))",
+    border: "1px solid rgba(139,255,190,0.95)",
+    boxShadow: "0 0 18px rgba(74,222,128,0.7), inset 0 1px 0 rgba(255,255,255,0.55)",
+  },
+  invalidPreview: {
+    background: "linear-gradient(145deg, rgba(255,59,92,0.7), rgba(112,19,43,0.78))",
+    border: "1px solid rgba(255,123,147,0.92)",
+    boxShadow: "0 0 16px rgba(255,59,92,0.58), inset 0 1px 0 rgba(255,255,255,0.28)",
+  },
   toast: { position: "absolute", left: "50%", bottom: -6, transform: "translate(-50%, 0)", background: "#241238", border: "1px solid rgba(255,214,90,0.5)", color: "#FFD65A", fontSize: 11.5, padding: "6px 12px", borderRadius: 20, whiteSpace: "nowrap", animation: "toastIn 1.2s ease forwards" },
   comboPop: { position: "absolute", left: "50%", top: "38%", zIndex: 32, color: "#FFF3C4", fontFamily: "'Baloo 2', sans-serif", fontSize: 28, fontWeight: 800, textShadow: "0 0 18px rgba(255,138,61,0.9)", pointerEvents: "none", whiteSpace: "nowrap", animation: "comboFloat 0.9s ease forwards" },
   jackpotBanner: {
@@ -1212,8 +1287,17 @@ const S = {
     background: "linear-gradient(135deg, #FFD65A, #FF8A3D)", color: "#2A1B08", border: "none", borderRadius: 20,
     padding: "8px 16px", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 12, cursor: "pointer",
   },
-  tray: { display: "flex", justifyContent: "space-around", alignItems: "center", marginTop: 8, background: "#1E1030", border: "1px solid #4A2E66", borderRadius: 8, padding: "7px 10px", minHeight: 46 },
-  trayPiece: { padding: 4, cursor: "grab", position: "relative" },
+  tray: {
+    display: "flex", justifyContent: "space-around", alignItems: "center", marginTop: 8,
+    background: "linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.015)), rgba(23,17,38,0.94)",
+    border: "1px solid rgba(183,164,216,0.34)",
+    borderRadius: 8,
+    padding: "7px 10px",
+    minHeight: 46,
+    boxShadow: "0 12px 28px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.08)",
+    backdropFilter: "blur(10px)",
+  },
+  trayPiece: { padding: 6, cursor: "grab", position: "relative", borderRadius: 8 },
   goldIcon: { position: "absolute", top: -2, right: -2 },
   boosterBar: { display: "flex", gap: 8, marginTop: 6 },
   boosterBtn: {
