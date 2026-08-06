@@ -37,12 +37,12 @@ enum NativeBridgeMode {
 struct ContentView: View {
     @StateObject private var messageHandler = WebViewMessageHandler()
     @State private var webView: WKWebView?
-    
+
     var body: some View {
         ZStack {
             Color(red: 0.07, green: 0.03, blue: 0.12)
                 .ignoresSafeArea()
-            
+
             if Self.isRunningForPreviews {
                 PreviewShellView()
             } else {
@@ -87,7 +87,9 @@ struct WebViewContainer: UIViewRepresentable {
     let messageHandler: WebViewMessageHandler
     @Binding var webView: WKWebView?
     let bridgeMode: NativeBridgeMode
-    
+    var initialSkinEnabled: Bool = true
+    var onPageLoaded: (() -> Void)? = nil
+
     func makeCoordinator() -> Coordinator {
         Coordinator(messageHandler: messageHandler)
     }
@@ -105,14 +107,24 @@ struct WebViewContainer: UIViewRepresentable {
         }
         
         let webView = WKWebView(frame: .zero, configuration: config)
+        webView.scrollView.isScrollEnabled = false
         webView.scrollView.bounces = false
+        // .never lets viewport-fit=cover + CSS env(safe-area-inset-*) own all layout;
+        // .automatic would double-shift content by adding its own content inset on top of CSS.
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.isOpaque = false
         webView.backgroundColor = .clear
+        webView.navigationDelegate = context.coordinator
         
         let bridgeScript = Self.bridgeScript(for: bridgeMode)
         if !bridgeScript.isEmpty {
             let script = WKUserScript(source: bridgeScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
             config.userContentController.addUserScript(script)
+        }
+        let skinScript = Self.blockBlastSkinScript(initialEnabled: initialSkinEnabled)
+        if !skinScript.isEmpty {
+            let style = WKUserScript(source: skinScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+            config.userContentController.addUserScript(style)
         }
         
         // Store reference
@@ -132,7 +144,7 @@ struct WebViewContainer: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: WKWebView, context: Context) {
-        // No updates needed
+        context.coordinator.onPageLoaded = onPageLoaded
     }
 
     private static func bridgeScript(for mode: NativeBridgeMode) -> String {
@@ -232,11 +244,116 @@ struct WebViewContainer: UIViewRepresentable {
         return scripts.joined(separator: "\n")
     }
     
-    class Coordinator: NSObject, WKScriptMessageHandler {
+    private static func blockBlastSkinScript(initialEnabled: Bool = true) -> String {
+        return """
+        (function() {
+          var BOARD_SIZE = 8;
+          window.__skinEnabled = \(initialEnabled ? "true" : "false");
+
+          function applyCanvasFilter(canvas) {
+            try {
+              canvas.style.filter = 'drop-shadow(0 3px 0 rgba(255,255,255,0.22)) drop-shadow(0 1px 0 rgba(255,255,255,0.12)) drop-shadow(0 14px 22px rgba(0,0,0,0.60)) saturate(1.22) contrast(1.10)';
+              canvas.style.webkitFilter = canvas.style.filter;
+            } catch (e) {}
+          }
+
+          function ensureGlossOverlay(rect) {
+            let overlay = document.getElementById('ios-gloss-overlay');
+            if (!overlay) {
+              overlay = document.createElement('div');
+              overlay.id = 'ios-gloss-overlay';
+              overlay.style.position = 'fixed';
+              overlay.style.pointerEvents = 'none';
+              overlay.style.zIndex = '9999';
+              overlay.style.mixBlendMode = 'screen';
+              overlay.style.display = window.__skinEnabled ? '' : 'none';
+              document.body.appendChild(overlay);
+            }
+            overlay.style.left = rect.left + 'px';
+            overlay.style.top = rect.top + 'px';
+            overlay.style.width = rect.width + 'px';
+            overlay.style.height = rect.height + 'px';
+            overlay.style.borderRadius = '18px';
+            overlay.style.backgroundImage =
+              'linear-gradient(to bottom, rgba(255,255,255,0.38), rgba(255,255,255,0.18) 38%, rgba(255,255,255,0.05) 58%, rgba(0,0,0,0.26)), ' +
+              'radial-gradient(circle at 28% 0%, rgba(255,255,255,0.38), rgba(255,255,255,0) 42%), ' +
+              'radial-gradient(circle at 72% 6%, rgba(255,255,255,0.22), rgba(255,255,255,0) 46%)';
+            overlay.style.backgroundRepeat = 'no-repeat';
+          }
+
+          function ensureBevelGridOverlay(rect) {
+            let overlay = document.getElementById('ios-bevel-grid');
+            if (!overlay) {
+              overlay = document.createElement('div');
+              overlay.id = 'ios-bevel-grid';
+              overlay.style.position = 'fixed';
+              overlay.style.pointerEvents = 'none';
+              overlay.style.zIndex = '9998';
+              overlay.style.mixBlendMode = 'overlay';
+              overlay.style.opacity = '0.50';
+              overlay.style.display = window.__skinEnabled ? '' : 'none';
+              document.body.appendChild(overlay);
+            }
+            overlay.style.left = rect.left + 'px';
+            overlay.style.top = rect.top + 'px';
+            overlay.style.width = rect.width + 'px';
+            overlay.style.height = rect.height + 'px';
+            overlay.style.borderRadius = '18px';
+            overlay.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -2px 8px rgba(0,0,0,0.28)';
+
+            var tileW = (rect.width / BOARD_SIZE);
+            var tileH = (rect.height / BOARD_SIZE);
+            overlay.style.backgroundSize = tileW + 'px ' + tileH + 'px';
+            overlay.style.backgroundRepeat = 'repeat';
+            overlay.style.backgroundImage =
+              'conic-gradient(from -90deg, ' +
+                'rgba(255,255,255,0.36) 0 28deg, ' +
+                'rgba(0,0,0,0.22) 28deg 144deg, ' +
+                'rgba(0,0,0,0.38) 144deg 216deg, ' +
+                'rgba(255,255,255,0.14) 216deg 332deg, ' +
+                'rgba(255,255,255,0.36) 332deg 360deg)';
+          }
+
+          function update() {
+            if (!window.__skinEnabled) return;
+            const canvas = document.querySelector('canvas');
+            if (!canvas) return;
+            applyCanvasFilter(canvas);
+            const rect = canvas.getBoundingClientRect();
+            ensureGlossOverlay(rect);
+            ensureBevelGridOverlay(rect);
+          }
+
+          // RAF debounce: coalesce rapid DOM mutations into one update per frame
+          var _rafPending = false;
+          function scheduleUpdate() {
+            if (_rafPending) return;
+            _rafPending = true;
+            requestAnimationFrame(function() { _rafPending = false; update(); });
+          }
+
+          const obs = new MutationObserver(scheduleUpdate);
+          obs.observe(document.documentElement, { childList: true, subtree: true });
+          window.addEventListener('resize', scheduleUpdate);
+
+          document.addEventListener('DOMContentLoaded', update);
+          setTimeout(update, 0);
+          setTimeout(update, 250);
+          setTimeout(update, 1000);
+        })();
+        """
+    }
+    
+    class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         let messageHandler: WebViewMessageHandler
-        
+        var onPageLoaded: (() -> Void)?
+
         init(messageHandler: WebViewMessageHandler) {
             self.messageHandler = messageHandler
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            onPageLoaded?()
         }
         
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
