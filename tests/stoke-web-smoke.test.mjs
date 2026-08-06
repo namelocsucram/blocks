@@ -93,6 +93,7 @@ test("generated app launches with board, tray, objectives, and coin shop", async
 
   try {
     assert.match(document.body.textContent, /STOKE/);
+    assert.match(document.body.textContent, /Run Mission/);
     assert.equal(document.querySelectorAll(".grid-cell").length, 64);
     assert.equal(document.querySelectorAll(".tray-piece").length, 3);
 
@@ -176,6 +177,8 @@ test("generated app shows game over and rewarded rescue clears space", async () 
     await new Promise((resolve) => setTimeout(resolve, 80));
 
     assert.match(document.body.textContent, /Table's Closed/);
+    assert.match(document.body.textContent, /Run XP/);
+    assert.match(document.body.textContent, /Coins earned/);
     assert.equal(visibleFilledCells(document).length, 64);
 
     buttonsWithText(document, "Watch ad")[0].click();

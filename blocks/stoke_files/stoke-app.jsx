@@ -59,6 +59,14 @@ const Bomb = (props) => <Icon {...props}><circle cx="11" cy="13" r="8"/><path d=
 const INTERSTITIAL_EVERY = 3;
 const REROLL_COST = 20;
 const ERASER_COST = 15;
+const RUN_MISSION_TEMPLATES = [
+  { type: "pieces", target: 8, label: "Place 8 pieces", reward: 8, mode: "add" },
+  { type: "lines", target: 3, label: "Clear 3 lines", reward: 10, mode: "add" },
+  { type: "combo", target: 3, label: "Build a 3x combo", reward: 12, mode: "max" },
+  { type: "heat", target: 12, label: "Reach hot heat", reward: 10, mode: "max" },
+  { type: "score", target: 250, label: "Score 250 points", reward: 8, mode: "add" },
+  { type: "jackpot", target: 1, label: "Trigger a jackpot", reward: 18, mode: "add" },
+];
 
 const PALETTE = [
   [255, 59, 92], [255, 166, 48], [255, 224, 76], [46, 213, 115],
@@ -70,6 +78,16 @@ function paletteRgb(idx) { return PALETTE[idx % PALETTE.length]; }
 function toRgb(c) { return `rgb(${c[0]}, ${c[1]}, ${c[2]})`; }
 function lighten(c, amt) { return c.map((v) => Math.round(v + (255 - v) * amt)); }
 function gemGradient(c) { return `linear-gradient(135deg, ${toRgb(lighten(c, 0.45))}, ${toRgb(c)})`; }
+function createRunStats() {
+  return { pieces: 0, lines: 0, jackpots: 0, bestCombo: 0, coinsEarned: 0, missionClaims: 0 };
+}
+function createRunMission() {
+  const template = RUN_MISSION_TEMPLATES[Math.floor(Math.random() * RUN_MISSION_TEMPLATES.length)];
+  return { ...template, id: `run-${Date.now()}-${Math.floor(Math.random() * 10000)}`, progress: 0, claimed: false };
+}
+function runXp(score, stats) {
+  return Math.floor(score / 12) + stats.lines * 10 + stats.jackpots * 60 + stats.bestCombo * 8 + stats.missionClaims * 25;
+}
 
 function shapeDims(shape) {
   let w = 0, h = 0;
@@ -100,7 +118,7 @@ function useDeviceLayout() {
   const isTablet = viewport.width >= 700;
   const isWide = viewport.width >= 860 && viewport.width > viewport.height;
   const isCompact = viewport.width < 390 || viewport.height < 700;
-  const verticalReserve = isCompact ? 330 : isTablet ? 380 : 350;
+  const verticalReserve = isCompact ? 378 : isTablet ? 430 : 400;
   const heightBound = Math.max(260, viewport.height - verticalReserve);
   const boardSize = Math.min(
     isTablet ? 560 : 460,
@@ -121,8 +139,8 @@ function useDeviceLayout() {
     statBox: { padding: isCompact ? "6px 8px" : "8px 10px" },
     statValue: { fontSize: isCompact ? 16 : 18 },
     grid: { width: boardSize, maxWidth: "100%", margin: "0 auto" },
-    tray: { marginTop: isCompact ? 8 : 10, padding: isCompact ? "8px 8px" : "12px 10px", minHeight: isCompact ? 48 : 60 },
-    trayCell: { size: isCompact ? 12 : 14, gap: isCompact ? 1.5 : 2 },
+    tray: { marginTop: isCompact ? 6 : 8, padding: isCompact ? "5px 8px" : "7px 10px", minHeight: isCompact ? 38 : 46 },
+    trayCell: { size: isCompact ? 10 : 12, gap: isCompact ? 1 : 1.5 },
     boosterBar: {
       gap: isCompact ? 6 : 8,
       marginTop: isCompact ? 8 : 6,
@@ -252,7 +270,20 @@ function useAudio(sfxMuted, musicMuted, heatPct) {
       const base = 420 + heat * 9;
       for (let i = 0; i < Math.min(lines, 4); i++) beep(base + i * 95, 0.17, "triangle", 0.09, i * 0.05);
     },
-    jackpot: () => { [523, 659, 784, 988, 1318].forEach((f, i) => beep(f, 0.22, "triangle", 0.11, i * 0.09)); },
+    jackpot: () => {
+      // Slot-machine style payout: reel ticks, coin drops, then a bright fanfare.
+      [880, 988, 1175, 1318, 1568, 1760, 1976, 2093].forEach((f, i) => {
+        beep(f, 0.045, "square", 0.055, i * 0.055);
+      });
+      [2637, 2349, 2093, 2637, 3136, 2794, 3136, 3520].forEach((f, i) => {
+        beep(f, 0.08, "triangle", 0.07, 0.42 + i * 0.075);
+      });
+      [523, 659, 784, 1047, 1318].forEach((f) => {
+        beep(f, 0.55, "sine", 0.045, 1.06);
+      });
+      beep(4186, 0.18, "triangle", 0.055, 1.1);
+      beep(3520, 0.2, "triangle", 0.05, 1.26);
+    },
     booster: () => { beep(880, 0.08, "sine", 0.08, 0); beep(1100, 0.08, "sine", 0.08, 0.05); },
     invalid: () => beep(140, 0.08, "square", 0.05),
     gameOver: () => { beep(300, 0.2, "sawtooth", 0.07, 0); beep(220, 0.22, "sawtooth", 0.07, 0.14); beep(140, 0.3, "sawtooth", 0.07, 0.3); },
@@ -337,6 +368,8 @@ function Stoke() {
   const [combo, setCombo] = useState(0);
   const [comboPop, setComboPop] = useState(null);
   const [shake, setShake] = useState(false);
+  const [runMission, setRunMission] = useState(() => createRunMission());
+  const [runStats, setRunStats] = useState(() => createRunStats());
 
   const gridRef = useRef(null);
   const cellSizeRef = useRef(40);
@@ -497,6 +530,8 @@ function Stoke() {
     setCombo(0);
     setComboPop(null);
     setShake(false);
+    setRunMission(createRunMission());
+    setRunStats(createRunStats());
   }
 
   function closeInterstitial() {
@@ -554,6 +589,27 @@ function Stoke() {
       });
       if (completed) setToast("Daily objective complete! 🎯");
       return next;
+    });
+  }
+
+  function bumpRunMission(type, amount, mode = "add") {
+    setRunMission((prev) => {
+      if (prev.claimed || prev.type !== type) return prev;
+      const newProgress = mode === "max" ? Math.max(prev.progress, amount) : prev.progress + amount;
+      const capped = Math.min(newProgress, prev.target);
+      if (capped >= prev.target && prev.progress < prev.target) {
+        setCoins((c) => c + prev.reward);
+        setRunStats((stats) => ({
+          ...stats,
+          coinsEarned: stats.coinsEarned + prev.reward,
+          missionClaims: stats.missionClaims + 1,
+        }));
+        setComboPop({ id: Date.now(), text: `MISSION +${prev.reward} coins` });
+        setToast(`Run mission complete! +${prev.reward} coins`);
+        sound.booster();
+        return { ...prev, progress: capped, claimed: true };
+      }
+      return { ...prev, progress: capped };
     });
   }
 
@@ -648,7 +704,9 @@ function Stoke() {
     setClearingKeys(filled);
     setScore((s) => s + bonus);
     setCoins((c) => c + 10);
+    setRunStats((stats) => ({ ...stats, jackpots: stats.jackpots + 1, coinsEarned: stats.coinsEarned + 10 }));
     bumpGoal("jackpot", 1);
+    bumpRunMission("jackpot", 1);
     setJackpotFlash(true);
     setShareReady(true);
     setToast(`JACKPOT! +${bonus}`);
@@ -693,6 +751,13 @@ function Stoke() {
     if (newHeat > heat) setPulse((p) => p + 1);
     setScore((s) => s + placementPts + clearPts);
     setCombo(comboNext);
+    setRunStats((stats) => ({
+      ...stats,
+      pieces: stats.pieces + 1,
+      lines: stats.lines + linesCleared,
+      bestCombo: Math.max(stats.bestCombo, comboNext),
+      coinsEarned: stats.coinsEarned + coinBonus,
+    }));
     if (linesCleared > 0) {
       setCoins((c) => c + coinBonus);
       setComboPop({ id: Date.now(), text: comboNext > 1 ? `${comboNext}x combo +${clearPts}` : `Line clear +${clearPts}` });
@@ -702,6 +767,11 @@ function Stoke() {
     bumpGoal("score", placementPts + clearPts);
     bumpGoal("heat", newHeat, "max");
     if (linesCleared > 0) bumpGoal("lines", linesCleared);
+    bumpRunMission("pieces", 1);
+    bumpRunMission("score", placementPts + clearPts);
+    bumpRunMission("heat", newHeat, "max");
+    if (linesCleared > 0) bumpRunMission("lines", linesCleared);
+    if (comboNext > 0) bumpRunMission("combo", comboNext, "max");
     if (linesCleared > 1) setToast(`${linesCleared} lines! Burst bonus`);
     else if (comboNext >= 3) setToast(`${comboNext}x combo cooking`);
     if (piece.gold) { bumpGoal("wildgem", 1); setToast("Wild Gem! Bonus payout"); sound.gold(); }
@@ -782,10 +852,22 @@ function Stoke() {
     };
   }, [drag]);
 
+  useEffect(() => {
+    const preventNativeSelection = (event) => event.preventDefault();
+    document.addEventListener("selectstart", preventNativeSelection);
+    document.addEventListener("contextmenu", preventNativeSelection);
+    return () => {
+      document.removeEventListener("selectstart", preventNativeSelection);
+      document.removeEventListener("contextmenu", preventNativeSelection);
+    };
+  }, []);
+
   const preview = getPreview();
   const multiplier = (1 + heat * 0.125).toFixed(2);
   const marqueeSpeed = Math.max(1.1, 3.2 - heatPct / 45);
   const heatMode = heatPct >= 100 ? "JACKPOT READY" : heatPct >= 75 ? "FEVER" : heatPct >= 45 ? "HOT" : "WARM";
+  const runMissionPct = Math.min(100, (runMission.progress / runMission.target) * 100);
+  const xpEarned = runXp(score, runStats);
 
   return (
     <div style={{ ...S.wrap, ...deviceLayout.wrap }}>
@@ -869,6 +951,17 @@ function Stoke() {
           })}
         </div>
       )}
+
+      <div style={S.runMission}>
+        <div style={S.runMissionTop}>
+          <span style={S.runMissionLabel}>Run Mission</span>
+          <span style={S.runMissionReward}>{runMission.claimed ? "claimed" : `+${runMission.reward} coins`}</span>
+        </div>
+        <div style={S.runMissionText}>{runMission.label}</div>
+        <div style={S.runMissionTrack}>
+          <div style={{ ...S.runMissionFill, width: `${runMissionPct}%` }} />
+        </div>
+      </div>
 
       <div style={{ ...S.statsRow, ...deviceLayout.statsRow }}>
         <div style={{ ...S.statBox, ...deviceLayout.statBox }}><div style={S.statLabel}>Score</div><div style={{ ...S.statValue, ...deviceLayout.statValue }}>{score}</div></div>
@@ -1012,6 +1105,12 @@ function Stoke() {
               <div><div style={S.statLabel}>Score</div><div style={S.statValue}>{score}</div></div>
               <div><div style={S.statLabel}>Best</div><div style={S.statValue}>{best}</div></div>
             </div>
+            <div style={S.runSummary}>
+              <div style={S.summaryItem}><span>Run XP</span><strong>+{xpEarned}</strong></div>
+              <div style={S.summaryItem}><span>Coins earned</span><strong>+{runStats.coinsEarned}</strong></div>
+              <div style={S.summaryItem}><span>Best combo</span><strong>{runStats.bestCombo}x</strong></div>
+              <div style={S.summaryItem}><span>Lines</span><strong>{runStats.lines}</strong></div>
+            </div>
             {!rescueUsed && (
               <button style={S.rescueBtn} onClick={watchAdToContinue} disabled={rescuing}>
                 {rescuing ? "Loading ad…" : "Watch ad to clear space & continue"}
@@ -1077,6 +1176,19 @@ const S = {
     cursor: "pointer", whiteSpace: "nowrap",
   },
   goalClaimed: { fontSize: 10.5, color: "#4ADE80", whiteSpace: "nowrap" },
+  runMission: {
+    background: "#170B27",
+    border: "1px solid #3B2758",
+    borderRadius: 7,
+    padding: "8px 10px",
+    marginBottom: 8,
+  },
+  runMissionTop: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 3 },
+  runMissionLabel: { color: "#FFD65A", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 800 },
+  runMissionReward: { color: "#4ADE80", fontSize: 10.5, whiteSpace: "nowrap", fontWeight: 700 },
+  runMissionText: { color: "#F3ECE3", fontSize: 11.5, fontFamily: "system-ui, sans-serif", marginBottom: 6 },
+  runMissionTrack: { height: 6, borderRadius: 3, background: "#0A0512", overflow: "hidden" },
+  runMissionFill: { height: "100%", borderRadius: 3, background: "linear-gradient(90deg, #4ADE80, #FFD65A)", transition: "width 0.25s ease" },
   statsRow: { display: "flex", gap: 8, marginBottom: 8 },
   statBox: { flex: 1, background: "#1E1030", border: "1px solid #4A2E66", borderRadius: 6, padding: "8px 10px" },
   statLabel: { fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "#B7A4D8", marginBottom: 4 },
@@ -1100,8 +1212,8 @@ const S = {
     background: "linear-gradient(135deg, #FFD65A, #FF8A3D)", color: "#2A1B08", border: "none", borderRadius: 20,
     padding: "8px 16px", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 12, cursor: "pointer",
   },
-  tray: { display: "flex", justifyContent: "space-around", alignItems: "center", marginTop: 10, background: "#1E1030", border: "1px solid #4A2E66", borderRadius: 8, padding: "12px 10px", minHeight: 60 },
-  trayPiece: { padding: 6, cursor: "grab", position: "relative" },
+  tray: { display: "flex", justifyContent: "space-around", alignItems: "center", marginTop: 8, background: "#1E1030", border: "1px solid #4A2E66", borderRadius: 8, padding: "7px 10px", minHeight: 46 },
+  trayPiece: { padding: 4, cursor: "grab", position: "relative" },
   goldIcon: { position: "absolute", top: -2, right: -2 },
   boosterBar: { display: "flex", gap: 8, marginTop: 6 },
   boosterBtn: {
@@ -1126,6 +1238,19 @@ const S = {
   overlayTitle: { fontFamily: "'Baloo 2', sans-serif", fontSize: 24, margin: "10px 0 4px", letterSpacing: "0.02em", color: "#FFD65A" },
   overlayText: { color: "#C9B8E8", fontSize: 12.5, marginBottom: 16, fontFamily: "system-ui, sans-serif" },
   overlayStats: { display: "flex", justifyContent: "center", gap: 24, marginBottom: 16 },
+  runSummary: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 },
+  summaryItem: {
+    background: "#241238",
+    border: "1px solid #4A2E66",
+    borderRadius: 6,
+    padding: "7px 8px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+    color: "#B7A4D8",
+    fontSize: 10.5,
+    fontFamily: "system-ui, sans-serif",
+  },
   coinTierList: { display: "flex", flexDirection: "column", gap: 8, marginTop: 6 },
   coinTierBtn: {
     display: "flex", justifyContent: "space-between", alignItems: "center",

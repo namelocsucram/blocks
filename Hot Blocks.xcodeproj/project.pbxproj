@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1371679B30242B0F002CDB36 /* TouchCursorOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1371679A30242B0F002CDB36 /* TouchCursorOverlay.swift */; };
 		13D83BB9301549F800B93C8A /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 13D83BB8301549F800B93C8A /* GoogleMobileAds */; };
 		13D83BBC30154A9200B93C8A /* ReceiptParser in Frameworks */ = {isa = PBXBuildFile; productRef = 13D83BBB30154A9200B93C8A /* ReceiptParser */; };
 		13D83BBE30154A9200B93C8A /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 13D83BBD30154A9200B93C8A /* RevenueCat */; };
@@ -14,6 +15,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		1371679A30242B0F002CDB36 /* TouchCursorOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchCursorOverlay.swift; sourceTree = "<group>"; };
 		13D83B883015455F00B93C8A /* Stoke Block Puzzle.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Stoke Block Puzzle.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -45,6 +47,7 @@
 			children = (
 				13D83B8A3015455F00B93C8A /* blocks */,
 				13D83B893015455F00B93C8A /* Products */,
+				1371679A30242B0F002CDB36 /* TouchCursorOverlay.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -138,6 +141,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1371679B30242B0F002CDB36 /* TouchCursorOverlay.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

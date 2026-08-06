@@ -53,6 +53,10 @@ struct ContentView: View {
                     bridgeMode: .disabled
                 )
                 .ignoresSafeArea()
+                .overlay(
+                    // Visual aiming aid: small cursor above the finger during drags
+                    TouchCursorOverlay(targetView: webView)
+                )
             }
         }
         .preferredColorScheme(.dark)
