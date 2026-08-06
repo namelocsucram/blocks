@@ -4,15 +4,15 @@ Use this checklist to ensure everything is set up correctly.
 
 ## Current Implementation Status
 
-- Native bridge: disabled again after simulator instability with `NativeBridgeMode.storageOnly`.
-- Storage: uses WebView `localStorage` while the native bridge is disabled.
-- RevenueCat bridge: still inactive; monetization handlers remain disabled until `NativeBridgeMode.storageAndMonetization` is ready and `PurchaseManager` has a production `appl_...` key.
-- AdMob bridge: still inactive until Google Mobile Ads is wired through the safer bridge mode.
+- Native bridge: defaults to `.disabled`; storage and AdMob can be enabled separately for controlled testing.
+- Storage: uses WebView `localStorage` by default; experimental native `UserDefaults` storage is available behind `-STOKEStorageBridgeEnabled` / `STOKE_STORAGE_BRIDGE_ENABLED=1`.
+- AdMob bridge: implemented behind `-STOKEAdMobBridgeEnabled` / `STOKE_ADMOB_BRIDGE_ENABLED=1`; SDK initialization, banner, interstitial, and rewarded actions are wired to Google Mobile Ads.
+- RevenueCat bridge: still inactive by default; purchase handlers require `-STOKEPurchasesBridgeEnabled` / `STOKE_PURCHASES_BRIDGE_ENABLED=1` and a production `appl_...` key.
 - Web app bundling: production-style HTML generated from `stoke_files/stoke-app.jsx` with local React/esbuild output; no CDN React or runtime Babel in shipped HTML.
 - Core game tests: `node:test` coverage now exercises placement validation, blocked-board detection, line clearing, piece fallback, heat/combo scoring, and gold-piece scoring via `stoke_files/stoke-core.mjs`.
 - Save migration tests: `node:test` coverage now exercises old `muted` save migration, streak rollover/reset, streak-freeze use, and daily-goal refresh via `stoke_files/stoke-save.mjs`.
 - Web smoke tests: `node:test` plus `happy-dom` now renders the generated app bundle and checks launch, board/tray render, daily objectives, coin shop, drag placement, game over, and rewarded-rescue flow.
-- Privacy manifest: first-party `PrivacyInfo.xcprivacy` is present and declares no first-party collection/tracking while the bridge remains disabled and gameplay data stays local.
+- Privacy manifest: first-party `PrivacyInfo.xcprivacy` is present; review labels against native `UserDefaults` storage and later AdMob/RevenueCat behavior before release.
 - Production blockers: App Privacy labels, privacy policy URL, AdMob/UMP behavior, RevenueCat production key, App Store Connect products, and real-device sandbox tests still need final verification before TestFlight.
 
 ## ✅ Initial Setup
@@ -31,7 +31,7 @@ Use this checklist to ensure everything is set up correctly.
   - [ ] Shows in Build Phases → Copy Bundle Resources
 
 - [ ] **Info.plist configured**
-  - [ ] `GADApplicationIdentifier` key added with AdMob app ID
+  - [x] `GADApplicationIdentifier` key added with AdMob app ID
   - [ ] `SKAdNetworkItems` array added
   - [ ] `NSUserTrackingUsageDescription` added
   - [ ] `UIViewControllerBasedStatusBarAppearance` set to `NO`
@@ -42,7 +42,7 @@ Use this checklist to ensure everything is set up correctly.
 - [ ] **All Swift files present:**
   - [ ] `blocksApp.swift` - App entry point
   - [ ] `ContentView.swift` - Main view with WebView
-  - [ ] `AdMobManager.swift` - AdMob integration
+  - [x] `ContentView.swift` - native AdMob bridge integration
   - [ ] `PurchaseManager.swift` - RevenueCat integration
   - [ ] `WebView.swift` - (optional, deprecated)
 

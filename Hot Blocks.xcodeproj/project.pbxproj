@@ -16,6 +16,7 @@
 
 /* Begin PBXFileReference section */
 		1371679A30242B0F002CDB36 /* TouchCursorOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchCursorOverlay.swift; sourceTree = "<group>"; };
+		13C845E530254F6A00FAD042 /* Hot-Blocks-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Hot-Blocks-Info.plist"; sourceTree = "<group>"; };
 		13D83B883015455F00B93C8A /* Stoke Block Puzzle.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Stoke Block Puzzle.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -45,6 +46,7 @@
 		13D83B7F3015455F00B93C8A = {
 			isa = PBXGroup;
 			children = (
+				13C845E530254F6A00FAD042 /* Hot-Blocks-Info.plist */,
 				13D83B8A3015455F00B93C8A /* blocks */,
 				13D83B893015455F00B93C8A /* Products */,
 				1371679A30242B0F002CDB36 /* TouchCursorOverlay.swift */,
@@ -287,6 +289,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Hot-Blocks-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Hot Blocks";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.puzzle-games";
@@ -294,7 +297,6 @@
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = NO;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
@@ -334,6 +336,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Hot-Blocks-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Hot Blocks";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.puzzle-games";
@@ -341,7 +344,6 @@
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = NO;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;

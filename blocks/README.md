@@ -6,9 +6,9 @@ A native iOS WebKit wrapper for the STOKE puzzle game, with production web bundl
 
 - The shipped game loads from bundled `index.html` generated from `stoke_files/stoke-app.jsx`.
 - React and game code are built ahead of time with esbuild; shipped HTML does not depend on CDN React or runtime Babel.
-- The native JavaScript bridge is currently disabled in `ContentView.swift` after simulator crashes in WebKit message handlers.
-- Gameplay save data currently uses WebView `localStorage`, not native `UserDefaults`.
-- AdMob and RevenueCat native handlers are not active until `NativeBridgeMode.storageAndMonetization` is safely re-enabled and tested on device.
+- The native JavaScript bridge defaults to `.disabled` for runtime stability.
+- An experimental storage-only bridge can be enabled with `-STOKEStorageBridgeEnabled` or `STOKE_STORAGE_BRIDGE_ENABLED=1`; gameplay otherwise uses WebView `localStorage`.
+- AdMob and RevenueCat native handlers are still inactive until storage-only stability is proven and `NativeBridgeMode.storageAndMonetization` is safely re-enabled on device.
 - `PrivacyInfo.xcprivacy` is present for first-party app behavior; App Privacy labels still need final review against AdMob, UMP, RevenueCat, and the final bridge state.
 
 ## 🎮 Game Overview
@@ -33,14 +33,14 @@ STOKE is a strategic block-placement puzzle game where players:
 
 ### Monetization
 - ⚠️ Browser/test placeholders for banner, interstitial, rewarded-rescue, and coin packs are present.
-- ⚠️ Native AdMob and RevenueCat flows are staged but disabled with the native bridge.
+- ⚠️ Native AdMob and RevenueCat flows are staged but not active in storage-only bridge mode.
 - ⚠️ Production release still requires UMP consent, AdMob verification, RevenueCat production key, App Store Connect products, and sandbox testing.
 
 ### Technical
 - ✅ Native SwiftUI + WebKit wrapper
 - ✅ Production bundled web app
-- ⚠️ JavaScript ↔ Native bridge is disabled for runtime stability
-- ✅ Persistent browser `localStorage`
+- ⚠️ JavaScript ↔ Native bridge is active for storage only; monetization handlers remain disabled
+- ✅ Persistent native `UserDefaults` storage with browser `localStorage` fallback
 - ✅ Audio engine with procedural music
 - ✅ Social sharing (jackpot cards)
 - ✅ Node test coverage for game logic, save migration, and generated web smoke flows

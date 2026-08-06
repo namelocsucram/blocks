@@ -23,12 +23,13 @@ Status: Complete
 
 Focus: replace placeholder ad handling with Google Mobile Ads SDK behavior.
 
-- [ ] Add an active `AdMobManager` using the installed GoogleMobileAds APIs.
-- [ ] Initialize Mobile Ads once at app launch.
-- [ ] Show and remove banner ads without covering game controls.
-- [ ] Load/present interstitial ads and report dismissal/failure to JavaScript.
-- [ ] Load/present rewarded ads and grant rewards only from native reward callbacks.
+- [x] Add active AdMob bridge code using the installed GoogleMobileAds APIs.
+- [x] Initialize Mobile Ads once before ad requests.
+- [x] Show and remove banner ads through the native bridge.
+- [x] Load/present interstitial ads through the native bridge.
+- [x] Load/present rewarded ads and grant rewards only from native reward callbacks.
 - [ ] Add UMP consent flow before ad requests.
+- [ ] Verify banner layout and full-screen ad behavior on a real device with AdMob test-device settings.
 
 ## Phase 3: Finish RevenueCat Purchases
 
@@ -37,7 +38,7 @@ Status: In progress
 Focus: make coin purchases safe, testable, and App Store ready.
 
 - [x] Split native bridge into explicit modes: disabled, storage-only, and storage plus monetization.
-- [ ] Re-enable native storage without activating AdMob or RevenueCat message handlers.
+- [ ] Re-enable native storage without activating AdMob or RevenueCat message handlers. Current storage-only implementation is flag-gated after a runtime crash.
 - [ ] Replace placeholder RevenueCat API key with the production `appl_...` key.
 - [ ] Verify App Store Connect products and RevenueCat offerings for `coins_100`, `coins_350`, `coins_800`, and `coins_2000`.
 - [ ] Return purchase results from Swift with package identifiers and failure reasons.

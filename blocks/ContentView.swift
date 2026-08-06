@@ -9,26 +9,40 @@ import SwiftUI
 import WebKit
 import Combine
 import RevenueCat
+import GoogleMobileAds
+import OSLog
+
+private let stokeBridgeLogger = Logger(subsystem: "com.stoke.blocks", category: "Bridge")
 
 enum NativeBridgeMode {
     case disabled
     case storageOnly
-    case storageAndMonetization
+    case storageAndAds
+    case storageAdsAndPurchases
     
     var includesStorage: Bool {
         switch self {
-        case .storageOnly, .storageAndMonetization:
+        case .storageOnly, .storageAndAds, .storageAdsAndPurchases:
             return true
         case .disabled:
             return false
         }
     }
     
-    var includesMonetization: Bool {
+    var includesAdMob: Bool {
         switch self {
-        case .storageAndMonetization:
+        case .storageAndAds, .storageAdsAndPurchases:
             return true
         case .disabled, .storageOnly:
+            return false
+        }
+    }
+    
+    var includesPurchases: Bool {
+        switch self {
+        case .storageAdsAndPurchases:
+            return true
+        case .disabled, .storageOnly, .storageAndAds:
             return false
         }
     }
@@ -50,7 +64,7 @@ struct ContentView: View {
                     htmlFileName: "index",
                     messageHandler: messageHandler,
                     webView: $webView,
-                    bridgeMode: .disabled
+                    bridgeMode: Self.defaultBridgeMode
                 )
                 .ignoresSafeArea()
                 .overlay(
@@ -63,6 +77,28 @@ struct ContentView: View {
         .statusBarHidden()
     }
     
+    private static var defaultBridgeMode: NativeBridgeMode {
+        let processInfo = ProcessInfo.processInfo
+        let storageBridgeEnabled = processInfo.arguments.contains("-STOKEStorageBridgeEnabled") ||
+            processInfo.environment["STOKE_STORAGE_BRIDGE_ENABLED"] == "1"
+        let adsBridgeEnabled = processInfo.arguments.contains("-STOKEAdMobBridgeEnabled") ||
+            processInfo.environment["STOKE_ADMOB_BRIDGE_ENABLED"] == "1"
+        let purchasesBridgeEnabled = processInfo.arguments.contains("-STOKEPurchasesBridgeEnabled") ||
+            processInfo.environment["STOKE_PURCHASES_BRIDGE_ENABLED"] == "1"
+        let mode: NativeBridgeMode
+        if purchasesBridgeEnabled {
+            mode = .storageAdsAndPurchases
+        } else if adsBridgeEnabled {
+            mode = .storageAndAds
+        } else if storageBridgeEnabled {
+            mode = .storageOnly
+        } else {
+            mode = .disabled
+        }
+        stokeBridgeLogger.notice("Default bridge mode selected: \(String(describing: mode), privacy: .public)")
+        return mode
+    }
+
     private static var isRunningForPreviews: Bool {
         ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
     }
@@ -95,16 +131,15 @@ struct WebViewContainer: UIViewRepresentable {
     }
     
     func makeUIView(context: Context) -> WKWebView {
+        stokeBridgeLogger.notice("makeUIView begin bridgeMode=\(String(describing: bridgeMode), privacy: .public)")
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         
-        if bridgeMode.includesStorage {
-            config.userContentController.add(context.coordinator, name: "storage")
-        }
-        if bridgeMode.includesMonetization {
-            config.userContentController.add(context.coordinator, name: "admobAction")
-            config.userContentController.add(context.coordinator, name: "purchaseAction")
-        }
+        Self.registerScriptMessageHandlers(
+            for: bridgeMode,
+            in: config.userContentController,
+            coordinator: context.coordinator
+        )
         
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.scrollView.isScrollEnabled = false
@@ -127,24 +162,66 @@ struct WebViewContainer: UIViewRepresentable {
             config.userContentController.addUserScript(style)
         }
         
-        // Store reference
+        messageHandler.webView = webView
+
+        // Store SwiftUI binding reference after UIView creation settles.
         DispatchQueue.main.async {
             self.webView = webView
-            messageHandler.webView = webView
         }
         
         // Load HTML file
         if let htmlPath = Bundle.main.path(forResource: htmlFileName, ofType: "html"),
            let htmlString = try? String(contentsOfFile: htmlPath, encoding: .utf8) {
             let baseURL = URL(fileURLWithPath: htmlPath)
+            stokeBridgeLogger.notice("Loading bundled HTML \(htmlFileName, privacy: .public).html bridgeMode=\(String(describing: bridgeMode), privacy: .public)")
             webView.loadHTMLString(htmlString, baseURL: baseURL)
+        } else {
+            stokeBridgeLogger.error("Failed to load bundled HTML \(htmlFileName, privacy: .public).html")
         }
         
+        stokeBridgeLogger.notice("makeUIView end bridgeMode=\(String(describing: bridgeMode), privacy: .public)")
         return webView
     }
     
     func updateUIView(_ uiView: WKWebView, context: Context) {
         context.coordinator.onPageLoaded = onPageLoaded
+    }
+
+    static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
+        stokeBridgeLogger.notice("dismantleUIView begin")
+        removeScriptMessageHandlers(from: uiView.configuration.userContentController)
+        uiView.navigationDelegate = nil
+        coordinator.messageHandler.webView = nil
+        stokeBridgeLogger.notice("dismantleUIView end")
+    }
+
+    private static func registerScriptMessageHandlers(
+        for mode: NativeBridgeMode,
+        in userContentController: WKUserContentController,
+        coordinator: Coordinator
+    ) {
+        stokeBridgeLogger.notice("Register script message handlers for mode=\(String(describing: mode), privacy: .public)")
+        removeScriptMessageHandlers(from: userContentController)
+
+        if mode.includesStorage {
+            stokeBridgeLogger.notice("Adding storage script message handler")
+            userContentController.add(WeakScriptMessageHandler(coordinator), name: "storage")
+        }
+        if mode.includesAdMob {
+            stokeBridgeLogger.notice("Adding AdMob script message handler")
+            userContentController.add(WeakScriptMessageHandler(coordinator), name: "admobAction")
+        }
+        if mode.includesPurchases {
+            stokeBridgeLogger.notice("Adding purchase script message handler")
+            userContentController.add(WeakScriptMessageHandler(coordinator), name: "purchaseAction")
+        }
+    }
+
+    private static func removeScriptMessageHandlers(from userContentController: WKUserContentController) {
+        ["storage", "admobAction", "purchaseAction"].forEach {
+            stokeBridgeLogger.notice("Removing script message handler \($0, privacy: .public)")
+            userContentController.removeScriptMessageHandler(forName: $0)
+        }
     }
 
     private static func bridgeScript(for mode: NativeBridgeMode) -> String {
@@ -153,6 +230,9 @@ struct WebViewContainer: UIViewRepresentable {
         if mode.includesStorage {
             scripts.append("""
             (function () {
+                let nextStorageRequestID = 1;
+                const STORAGE_TIMEOUT_MS = 1200;
+
                 function postNative(handlerName, payload) {
                     try {
                         const target = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[handlerName];
@@ -165,20 +245,56 @@ struct WebViewContainer: UIViewRepresentable {
                     }
                 }
 
+                function fallbackGet(storageKey) {
+                    try {
+                        const value = localStorage.getItem(storageKey);
+                        return value ? { value } : {};
+                    } catch (error) {
+                        return {};
+                    }
+                }
+
+                function fallbackSet(storageKey, value) {
+                    try { localStorage.setItem(storageKey, value); } catch (error) {}
+                }
+
                 window.storage = {
                     get: (key) => {
                         return new Promise((resolve) => {
                             const storageKey = String(key || '');
                             if (!storageKey) { resolve({}); return; }
+
+                            const requestID = String(nextStorageRequestID++);
                             window.storageCallbacks = window.storageCallbacks || {};
-                            window.storageCallbacks[storageKey] = resolve;
-                            if (!postNative('storage', { action: 'get', key: storageKey })) resolve({});
+                            const timeout = setTimeout(() => {
+                                if (!window.storageCallbacks || !window.storageCallbacks[requestID]) return;
+                                delete window.storageCallbacks[requestID];
+                                resolve(fallbackGet(storageKey));
+                            }, STORAGE_TIMEOUT_MS);
+
+                            window.storageCallbacks[requestID] = (result) => {
+                                clearTimeout(timeout);
+                                delete window.storageCallbacks[requestID];
+                                if (result && typeof result.value === 'string') {
+                                    resolve(result);
+                                } else {
+                                    resolve(fallbackGet(storageKey));
+                                }
+                            };
+
+                            if (!postNative('storage', { action: 'get', key: storageKey, requestID })) {
+                                clearTimeout(timeout);
+                                delete window.storageCallbacks[requestID];
+                                resolve(fallbackGet(storageKey));
+                            }
                         });
                     },
                     set: (key, value) => {
                         const storageKey = String(key || '');
                         if (!storageKey) return Promise.resolve();
-                        postNative('storage', { action: 'set', key: storageKey, value: String(value || '') });
+                        const storageValue = String(value || '');
+                        fallbackSet(storageKey, storageValue);
+                        postNative('storage', { action: 'set', key: storageKey, value: storageValue });
                         return Promise.resolve();
                     }
                 };
@@ -186,7 +302,18 @@ struct WebViewContainer: UIViewRepresentable {
             """)
         }
 
-        if mode.includesMonetization {
+        if mode.includesAdMob || mode.includesPurchases {
+            scripts.append("""
+            (function () {
+                window.Capacitor = {
+                    isNativePlatform: () => true,
+                    Plugins: window.Capacitor?.Plugins || {}
+                };
+            })();
+            """)
+        }
+
+        if mode.includesAdMob {
             scripts.append("""
             (function () {
                 function postNative(handlerName, payload) {
@@ -200,11 +327,6 @@ struct WebViewContainer: UIViewRepresentable {
                         return false;
                     }
                 }
-
-                window.Capacitor = {
-                    isNativePlatform: () => true,
-                    Plugins: window.Capacitor?.Plugins || {}
-                };
 
                 window.Capacitor.Plugins.AdMob = {
                     initialize: () => Promise.resolve(postNative('admobAction', { action: 'initialize' })),
@@ -222,6 +344,24 @@ struct WebViewContainer: UIViewRepresentable {
                         window.admobListeners[eventName] = callback;
                     }
                 };
+            })();
+            """)
+        }
+
+        if mode.includesPurchases {
+            scripts.append("""
+            (function () {
+                function postNative(handlerName, payload) {
+                    try {
+                        const target = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[handlerName];
+                        if (!target) return false;
+                        target.postMessage(JSON.stringify(payload || {}));
+                        return true;
+                    } catch (error) {
+                        console.warn('Native bridge post failed', handlerName, error);
+                        return false;
+                    }
+                }
 
                 window.Capacitor.Plugins.Purchases = {
                     configure: () => Promise.resolve(postNative('purchaseAction', { action: 'configure' })),
@@ -344,6 +484,22 @@ struct WebViewContainer: UIViewRepresentable {
         """
     }
     
+    private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
+        weak var target: WKScriptMessageHandler?
+
+        init(_ target: WKScriptMessageHandler) {
+            self.target = target
+        }
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard let target else {
+                stokeBridgeLogger.error("Dropping script message \(message.name, privacy: .public): target deallocated")
+                return
+            }
+            target.userContentController(userContentController, didReceive: message)
+        }
+    }
+
     class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         let messageHandler: WebViewMessageHandler
         var onPageLoaded: (() -> Void)?
@@ -353,11 +509,16 @@ struct WebViewContainer: UIViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            stokeBridgeLogger.notice("WKWebView didFinish navigation")
             onPageLoaded?()
         }
         
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard let body = Self.messageBodyDictionary(message.body) else { return }
+            stokeBridgeLogger.notice("Received script message \(message.name, privacy: .public)")
+            guard let body = Self.messageBodyDictionary(message.body) else {
+                stokeBridgeLogger.error("Invalid script message body for \(message.name, privacy: .public)")
+                return
+            }
             
             switch message.name {
             case "storage":
@@ -393,6 +554,175 @@ struct WebViewContainer: UIViewRepresentable {
                 return nil
             }
         }
+    }
+}
+
+// MARK: - Native AdMob Bridge
+
+@MainActor
+final class NativeAdMobBridge: NSObject, FullScreenContentDelegate, BannerViewDelegate {
+    static let shared = NativeAdMobBridge()
+
+    private enum AdUnitID {
+        static let banner = "ca-app-pub-7262617456411456/9508273591"
+        static let interstitial = "ca-app-pub-7262617456411456/6307395181"
+        static let rewarded = "ca-app-pub-7262617456411456/7812048544"
+    }
+
+    private var didInitialize = false
+    private var bannerView: BannerView?
+    private var bannerBottomConstraint: NSLayoutConstraint?
+    private var interstitialAd: InterstitialAd?
+    private var rewardedAd: RewardedAd?
+
+    func handle(_ body: [String: Any]) {
+        guard let action = body["action"] as? String else { return }
+        let options = body["options"] as? [String: Any]
+
+        switch action {
+        case "initialize":
+            initialize()
+        case "showBanner":
+            showBanner(adUnitID: adUnitID(from: options, fallback: AdUnitID.banner))
+        case "removeBanner":
+            removeBanner()
+        case "prepareInterstitial":
+            prepareInterstitial(adUnitID: adUnitID(from: options, fallback: AdUnitID.interstitial))
+        case "showInterstitial":
+            showInterstitial()
+        case "prepareRewardVideoAd":
+            prepareRewarded(adUnitID: adUnitID(from: options, fallback: AdUnitID.rewarded))
+        case "showRewardVideoAd":
+            showRewarded()
+        default:
+            stokeBridgeLogger.error("Unknown AdMob action: \(action, privacy: .public)")
+        }
+    }
+
+    private func initialize() {
+        guard !didInitialize else { return }
+        didInitialize = true
+        stokeBridgeLogger.notice("Starting Google Mobile Ads SDK")
+        MobileAds.shared.start()
+    }
+
+    private func showBanner(adUnitID: String) {
+        initialize()
+        guard let rootViewController = currentRootViewController() else {
+            stokeBridgeLogger.error("Unable to show banner: missing root view controller")
+            return
+        }
+
+        let width = max(rootViewController.view.bounds.width, 320)
+        let adSize = largeAnchoredAdaptiveBanner(width: width)
+        let banner = bannerView ?? BannerView(adSize: adSize)
+        banner.adUnitID = adUnitID
+        banner.rootViewController = rootViewController
+        banner.delegate = self
+        banner.adSize = adSize
+
+        if banner.superview == nil {
+            banner.translatesAutoresizingMaskIntoConstraints = false
+            rootViewController.view.addSubview(banner)
+            let bottomConstraint = banner.bottomAnchor.constraint(equalTo: rootViewController.view.safeAreaLayoutGuide.bottomAnchor)
+            bannerBottomConstraint = bottomConstraint
+            NSLayoutConstraint.activate([
+                bottomConstraint,
+                banner.centerXAnchor.constraint(equalTo: rootViewController.view.centerXAnchor)
+            ])
+        }
+
+        bannerView = banner
+        banner.load(Request())
+        stokeBridgeLogger.notice("Requested banner ad")
+    }
+
+    private func removeBanner() {
+        bannerBottomConstraint?.isActive = false
+        bannerBottomConstraint = nil
+        bannerView?.delegate = nil
+        bannerView?.removeFromSuperview()
+        bannerView = nil
+        stokeBridgeLogger.notice("Removed banner ad")
+    }
+
+    private func prepareInterstitial(adUnitID: String) {
+        initialize()
+        Task { @MainActor in
+            do {
+                interstitialAd = try await InterstitialAd.load(with: adUnitID, request: Request())
+                interstitialAd?.fullScreenContentDelegate = self
+                stokeBridgeLogger.notice("Interstitial ad loaded")
+            } catch {
+                interstitialAd = nil
+                stokeBridgeLogger.error("Interstitial ad failed to load: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    private func showInterstitial() {
+        initialize()
+        guard let rootViewController = currentRootViewController(), let interstitialAd else {
+            stokeBridgeLogger.error("Unable to show interstitial: ad or root view controller missing")
+            return
+        }
+        interstitialAd.present(from: rootViewController)
+        self.interstitialAd = nil
+    }
+
+    private func prepareRewarded(adUnitID: String) {
+        initialize()
+        Task { @MainActor in
+            do {
+                rewardedAd = try await RewardedAd.load(with: adUnitID, request: Request())
+                rewardedAd?.fullScreenContentDelegate = self
+                stokeBridgeLogger.notice("Rewarded ad loaded")
+            } catch {
+                rewardedAd = nil
+                stokeBridgeLogger.error("Rewarded ad failed to load: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    private func showRewarded() {
+        initialize()
+        guard let rootViewController = currentRootViewController(), let rewardedAd else {
+            stokeBridgeLogger.error("Unable to show rewarded ad: ad or root view controller missing")
+            NotificationCenter.default.post(name: .rewardedAdFailed, object: nil)
+            return
+        }
+        rewardedAd.present(from: rootViewController) {
+            NotificationCenter.default.post(name: .rewardedAdEarned, object: nil)
+        }
+        self.rewardedAd = nil
+    }
+
+    func ad(_ ad: FullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
+        stokeBridgeLogger.error("Full-screen ad failed to present: \(error.localizedDescription, privacy: .public)")
+        NotificationCenter.default.post(name: .rewardedAdFailed, object: nil)
+    }
+
+    func bannerViewDidReceiveAd(_ bannerView: BannerView) {
+        stokeBridgeLogger.notice("Banner ad loaded")
+    }
+
+    func bannerView(_ bannerView: BannerView, didFailToReceiveAdWithError error: Error) {
+        stokeBridgeLogger.error("Banner ad failed to load: \(error.localizedDescription, privacy: .public)")
+    }
+
+    private func adUnitID(from options: [String: Any]?, fallback: String) -> String {
+        guard let adUnitID = options?["adId"] as? String, !adUnitID.isEmpty else {
+            return fallback
+        }
+        return adUnitID
+    }
+
+    private func currentRootViewController() -> UIViewController? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow }?
+            .rootViewController
     }
 }
 
@@ -475,17 +805,26 @@ class WebViewMessageHandler: ObservableObject {
     func handleStorageMessage(_ body: [String: Any]) {
         guard let action = body["action"] as? String,
               let key = body["key"] as? String else { return }
-        
+
         switch action {
         case "get":
+            guard let requestID = body["requestID"] as? String else {
+                stokeBridgeLogger.error("Storage get missing requestID for key=\(key, privacy: .public)")
+                return
+            }
+            stokeBridgeLogger.notice("Storage get key=\(key, privacy: .public) requestID=\(requestID, privacy: .public)")
             let value = UserDefaults.standard.string(forKey: key)
             let response = value != nil ? ["value": value!] : [:]
             let jsonString = toJSON(response)
-            let keyLiteral = jsStringLiteral(key)
-            evaluateJS("if (window.storageCallbacks?.[\(keyLiteral)]) { window.storageCallbacks[\(keyLiteral)](\(jsonString)); }")
+            let requestIDLiteral = jsStringLiteral(requestID)
+            evaluateJS("if (window.storageCallbacks?.[\(requestIDLiteral)]) { window.storageCallbacks[\(requestIDLiteral)](\(jsonString)); }")
         case "set":
             if let value = body["value"] as? String {
+                stokeBridgeLogger.notice("Storage set key=\(key, privacy: .public) bytes=\(value.utf8.count, privacy: .public)")
                 UserDefaults.standard.set(value, forKey: key)
+                UserDefaults.standard.synchronize()
+            } else {
+                stokeBridgeLogger.error("Storage set missing value for key=\(key, privacy: .public)")
             }
         default:
             break
@@ -493,9 +832,7 @@ class WebViewMessageHandler: ObservableObject {
     }
     
     func handleAdMobMessage(_ body: [String: Any]) {
-        // TODO: Integrate with existing AdMobManager or implement simple version
-        print("AdMob action requested:", body)
-        // NotificationCenter.default.post(name: .adMobAction, object: body)
+        NativeAdMobBridge.shared.handle(body)
     }
     
     func handlePurchasesMessage(_ body: [String: Any]) {
@@ -503,9 +840,13 @@ class WebViewMessageHandler: ObservableObject {
     }
     
     func evaluateJS(_ script: String) {
-        webView?.evaluateJavaScript(script) { result, error in
+        guard let webView else {
+            stokeBridgeLogger.error("Skipping evaluateJS because webView is nil")
+            return
+        }
+        webView.evaluateJavaScript(script) { _, error in
             if let error = error {
-                print("JS Error: \(error.localizedDescription)")
+                stokeBridgeLogger.error("JS evaluation failed: \(error.localizedDescription, privacy: .public)")
             }
         }
     }
@@ -519,7 +860,7 @@ class WebViewMessageHandler: ObservableObject {
     }
     
     private func jsStringLiteral(_ value: String) -> String {
-        guard let data = try? JSONSerialization.data(withJSONObject: value),
+        guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed]),
               let json = String(data: data, encoding: .utf8) else {
             return "\"\""
         }

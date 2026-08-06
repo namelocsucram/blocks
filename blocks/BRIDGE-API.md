@@ -1,12 +1,12 @@
 # JavaScript ↔ Native Bridge API Reference
 
-This document describes the inactive JavaScript/native bridge contract.
+This document describes the JavaScript/native bridge contract. Storage and AdMob are implemented but flag-gated; RevenueCat purchase APIs remain inactive by default.
 
 ## Overview
 
 The bridge works by injecting JavaScript objects (`window.Capacitor`, `window.storage`) that send messages to Swift code via WebKit's message handlers. Responses come back via JavaScript callbacks.
 
-Current runtime status: `ContentView.swift` uses `bridgeMode: .disabled`, so none of these bridge APIs are active in the shipped app right now. The web app falls back to WebView `localStorage` and browser/test monetization behavior until a safe native bridge mode is re-enabled and tested.
+Current runtime status: `ContentView.swift` defaults to `bridgeMode: .disabled`, so the shipped app uses WebView `localStorage` and no native ad bridge. Passing `-STOKEStorageBridgeEnabled` or setting `STOKE_STORAGE_BRIDGE_ENABLED=1` enables experimental `window.storage` backed by native `UserDefaults`. Passing `-STOKEAdMobBridgeEnabled` or setting `STOKE_ADMOB_BRIDGE_ENABLED=1` enables storage plus `window.Capacitor.Plugins.AdMob`. Purchases remain inactive unless `-STOKEPurchasesBridgeEnabled` or `STOKE_PURCHASES_BRIDGE_ENABLED=1` is explicitly enabled.
 
 ## Storage API
 
@@ -354,11 +354,8 @@ await window.storage.set("test", "hello");
 const result = await window.storage.get("test");
 console.log(result); // {value: "hello"}
 
-// Test platform detection
-console.log(window.Capacitor.isNativePlatform()); // true
-
-// Test ad availability
-console.log(window.Capacitor.Plugins.AdMob); // {initialize: ƒ, showBanner: ƒ, ...}
+// In storage-only mode, monetization bridge APIs are intentionally absent.
+console.log(window.Capacitor); // undefined until storageAndMonetization is enabled
 ```
 
 ### Console Logs
