@@ -571,7 +571,7 @@ final class NativeAdMobBridge: NSObject, FullScreenContentDelegate, BannerViewDe
 
     private var didInitialize = false
     private var bannerView: BannerView?
-    private var bannerBottomConstraint: NSLayoutConstraint?
+    private var bannerConstraints: [NSLayoutConstraint] = []
     private var interstitialAd: InterstitialAd?
     private var rewardedAd: RewardedAd?
 
@@ -583,7 +583,7 @@ final class NativeAdMobBridge: NSObject, FullScreenContentDelegate, BannerViewDe
         case "initialize":
             initialize()
         case "showBanner":
-            showBanner(adUnitID: adUnitID(from: options, fallback: AdUnitID.banner))
+            showBanner(adUnitID: adUnitID(from: options, fallback: AdUnitID.banner), options: options)
         case "removeBanner":
             removeBanner()
         case "prepareInterstitial":
@@ -602,44 +602,53 @@ final class NativeAdMobBridge: NSObject, FullScreenContentDelegate, BannerViewDe
     private func initialize() {
         guard !didInitialize else { return }
         didInitialize = true
+        MobileAds.shared.requestConfiguration.testDeviceIdentifiers = [
+            "71421e1a66f936bd9af28876132fb06a"
+        ]
         stokeBridgeLogger.notice("Starting Google Mobile Ads SDK")
         MobileAds.shared.start()
     }
 
-    private func showBanner(adUnitID: String) {
+    private func showBanner(adUnitID: String, options: [String: Any]?) {
         initialize()
-        guard let rootViewController = currentRootViewController() else {
-            stokeBridgeLogger.error("Unable to show banner: missing root view controller")
+        guard let rootViewController = currentRootViewController(),
+              let hostView = currentKeyWindow() else {
+            stokeBridgeLogger.error("Unable to show banner: missing root view controller or key window")
             return
         }
 
-        let width = max(rootViewController.view.bounds.width, 320)
-        let adSize = largeAnchoredAdaptiveBanner(width: width)
+        let slotFrame = bannerSlotFrame(from: options, in: hostView)
+        let adSize = AdSizeBanner
         let banner = bannerView ?? BannerView(adSize: adSize)
         banner.adUnitID = adUnitID
         banner.rootViewController = rootViewController
         banner.delegate = self
         banner.adSize = adSize
 
-        if banner.superview == nil {
+        if banner.superview !== hostView {
+            banner.removeFromSuperview()
             banner.translatesAutoresizingMaskIntoConstraints = false
-            rootViewController.view.addSubview(banner)
-            let bottomConstraint = banner.bottomAnchor.constraint(equalTo: rootViewController.view.safeAreaLayoutGuide.bottomAnchor)
-            bannerBottomConstraint = bottomConstraint
-            NSLayoutConstraint.activate([
-                bottomConstraint,
-                banner.centerXAnchor.constraint(equalTo: rootViewController.view.centerXAnchor)
-            ])
+            hostView.addSubview(banner)
         }
+
+        NSLayoutConstraint.deactivate(bannerConstraints)
+        let bannerVerticalOffset: CGFloat = 50
+        let centerX = slotFrame?.midX ?? hostView.bounds.midX
+        let centerY = (slotFrame?.midY ?? (hostView.safeAreaInsets.top + 93)) + bannerVerticalOffset
+        bannerConstraints = [
+            banner.centerXAnchor.constraint(equalTo: hostView.leadingAnchor, constant: centerX),
+            banner.centerYAnchor.constraint(equalTo: hostView.topAnchor, constant: centerY)
+        ]
+        NSLayoutConstraint.activate(bannerConstraints)
 
         bannerView = banner
         banner.load(Request())
-        stokeBridgeLogger.notice("Requested banner ad")
+        stokeBridgeLogger.notice("Requested banner ad at x=\(centerX, privacy: .public) y=\(centerY, privacy: .public)")
     }
 
     private func removeBanner() {
-        bannerBottomConstraint?.isActive = false
-        bannerBottomConstraint = nil
+        NSLayoutConstraint.deactivate(bannerConstraints)
+        bannerConstraints = []
         bannerView?.delegate = nil
         bannerView?.removeFromSuperview()
         bannerView = nil
@@ -717,12 +726,33 @@ final class NativeAdMobBridge: NSObject, FullScreenContentDelegate, BannerViewDe
         return adUnitID
     }
 
+    private func bannerSlotFrame(from options: [String: Any]?, in hostView: UIView) -> CGRect? {
+        guard let frame = options?["adBannerFrame"] as? [String: Any],
+              let x = frame["x"] as? Double,
+              let y = frame["y"] as? Double,
+              let width = frame["width"] as? Double,
+              let height = frame["height"] as? Double,
+              width > 0,
+              height > 0 else {
+            return nil
+        }
+        return CGRect(
+            x: CGFloat(x),
+            y: CGFloat(y),
+            width: min(CGFloat(width), hostView.bounds.width),
+            height: CGFloat(height)
+        )
+    }
+
     private func currentRootViewController() -> UIViewController? {
+        currentKeyWindow()?.rootViewController
+    }
+
+    private func currentKeyWindow() -> UIWindow? {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)
-            .first { $0.isKeyWindow }?
-            .rootViewController
+            .first { $0.isKeyWindow }
     }
 }
 

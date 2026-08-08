@@ -120,7 +120,7 @@ function useDeviceLayout() {
     },
     title: { fontSize: isCompact ? 28 : isTablet ? 38 : 32 },
     tagline: { display: isCompact ? "none" : "block" },
-    adBanner: { height: isCompact ? 34 : 44, marginBottom: isCompact ? 6 : 12 },
+    adBanner: { height: 50, marginBottom: isCompact ? 6 : 12 },
     statsRow: { gap: isCompact ? 6 : 8, marginBottom: isCompact ? 6 : 14 },
     statBox: { padding: isCompact ? "6px 8px" : "8px 10px" },
     statValue: { fontSize: isCompact ? 16 : 18 },
@@ -494,11 +494,20 @@ export default function Stoke() {
     const plugins = getCapPlugins();
     if (!isNative() || !plugins || !plugins.AdMob) return;
     plugins.AdMob.initialize().then(() => {
-      plugins.AdMob.showBanner({
-        adId: ADMOB_BANNER_ID,
-        adSize: "BANNER",
-        position: "BOTTOM_CENTER",
-      }).catch(() => {});
+      const showNativeBanner = () => {
+        const adSlot = document.getElementById("stoke-ad-banner-slot");
+        const adBannerFrame = adSlot ? (() => {
+          const rect = adSlot.getBoundingClientRect();
+          return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+        })() : null;
+        plugins.AdMob.showBanner({
+          adId: ADMOB_BANNER_ID,
+          adSize: "BANNER",
+          position: "TOP_CENTER",
+          adBannerFrame,
+        }).catch(() => {});
+      };
+      requestAnimationFrame(() => setTimeout(showNativeBanner, 50));
       plugins.AdMob.prepareRewardVideoAd({ adId: ADMOB_REWARDED_ID }).catch(() => {});
       plugins.AdMob.prepareInterstitial({ adId: ADMOB_INTERSTITIAL_ID }).catch(() => {});
     }).catch(() => {});
@@ -879,7 +888,7 @@ export default function Stoke() {
         <p style={{ ...S.tagline, ...deviceLayout.tagline }}>Clear lines to build heat. Max it out for a JACKPOT bomb that clears the board.</p>
       </div>
 
-      <div style={{ ...S.adBanner, ...deviceLayout.adBanner }}>{isNative() ? "Live ad banner (AdMob)" : "Ad banner placeholder · 320×50 — real in native build"}</div>
+      <div id="stoke-ad-banner-slot" style={{ ...S.adBanner, ...deviceLayout.adBanner }}>{isNative() ? "" : "Ad banner placeholder · 320×50 — real in native build"}</div>
 
       <button style={S.goalsToggle} onClick={() => setShowGoals((v) => !v)}>
         <span>🎯 Daily Objectives</span>
@@ -1096,9 +1105,9 @@ const S = {
   streakBadge: { fontSize: 10.5, letterSpacing: "0.04em", padding: "3px 8px", borderRadius: 4, border: "1px solid #4A2E66", color: "#FFD65A", background: "#241238" },
   tagline: { color: "#C9B8E8", fontSize: 12.5, marginTop: 8, lineHeight: 1.5, fontFamily: "system-ui, sans-serif" },
   adBanner: {
-    height: 44, borderRadius: 6, border: "1px dashed #4A2E66", background: "#1A0F2A",
+    height: 50, borderRadius: 6, border: "1px dashed #4A2E66", background: "#1A0F2A",
     color: "#6E5F8C", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center",
-    letterSpacing: "0.04em", marginBottom: 12,
+    letterSpacing: "0.04em", marginBottom: 12, overflow: "hidden",
   },
   goalsToggle: {
     width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center",
