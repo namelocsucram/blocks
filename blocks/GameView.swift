@@ -40,6 +40,13 @@ struct GameView: View {
     @StateObject private var model = GameModel()
 
     var body: some View {
+        GeometryReader { geo in
+        // Non-grid reserved height: header(74) + goals(42) + stats(68) + gridPad(8)
+        //   + tray(104) + boosters(58) + bottomPad(60) = 414
+        let reserved: CGFloat = 414
+        let fromHeight = (geo.size.height - reserved) * CGFloat(BOARD_COLS) / CGFloat(BOARD_ROWS)
+        let gridSize = min(460, geo.size.width - 32, max(200, fromHeight))
+
         ZStack {
             LinearGradient(colors: [C_BG_TOP, C_BG_BOT], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
@@ -58,7 +65,9 @@ struct GameView: View {
                     .padding(.top, 8)
 
                 GridBoardView(model: model)
-                    .padding(.horizontal, 12)
+                    .frame(width: gridSize,
+                           height: gridSize * CGFloat(BOARD_ROWS) / CGFloat(BOARD_COLS))
+                    .padding(.horizontal, 16)
                     .padding(.top, 8)
 
                 PieceTrayView(model: model)
@@ -69,7 +78,6 @@ struct GameView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
 
-                Spacer(minLength: 0)
             }
             .padding(.bottom, 60)
 
@@ -95,6 +103,7 @@ struct GameView: View {
         .preferredColorScheme(.dark)
         .statusBarHidden()
         .onAppear { model.initializeAds() }
+        } // GeometryReader
     }
 }
 
@@ -307,33 +316,35 @@ struct GridBoardView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let cs     = (geo.size.width - 2*GRID_PAD - GRID_GAP * CGFloat(BOARD_SIZE-1)) / CGFloat(BOARD_SIZE)
+            let cs     = (geo.size.width - 2*GRID_PAD - GRID_GAP * CGFloat(BOARD_COLS-1)) / CGFloat(BOARD_COLS)
             let stride = cs + GRID_GAP
 
             ZStack(alignment: .topLeading) {
                 C_PANEL
 
-                // Placed cells
-                ForEach(0..<BOARD_SIZE, id: \.self) { r in
-                    ForEach(0..<BOARD_SIZE, id: \.self) { c in
+                // All cells — filled or empty with subtle border (creates grid-line effect)
+                ForEach(0..<BOARD_ROWS, id: \.self) { r in
+                    ForEach(0..<BOARD_COLS, id: \.self) { c in
                         let key = "\(r)-\(c)"
                         let clearing = model.clearingCells.contains(key)
-                        if let cell = model.grid[r][c] {
-                            BlockCell(colorIdx: cell.colorIdx, isGold: cell.isGold)
-                                .frame(width: cs, height: cs)
-                                .scaleEffect(clearing ? 1.4 : 1.0)
-                                .opacity(clearing ? 0 : 1)
-                                .animation(.easeOut(duration: 0.18), value: clearing)
-                                .offset(x: GRID_PAD + CGFloat(c)*stride,
-                                        y: GRID_PAD + CGFloat(r)*stride)
+                        Group {
+                            if let cell = model.grid[r][c] {
+                                BlockCell(colorIdx: cell.colorIdx, isGold: cell.isGold)
+                                    .scaleEffect(clearing ? 1.4 : 1.0)
+                                    .opacity(clearing ? 0 : 1)
+                                    .animation(.easeOut(duration: 0.18), value: clearing)
+                            } else {
+                                // Empty cell — matches original's `border: 1px solid #2A1F3D`
+                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                    .stroke(Color(red: 0.165, green: 0.122, blue: 0.239),
+                                            lineWidth: 1)
+                            }
                         }
-                        // Transparent tap target for every cell (erase mode)
-                        Color.clear
-                            .frame(width: cs, height: cs)
-                            .contentShape(Rectangle())
-                            .offset(x: GRID_PAD + CGFloat(c)*stride,
-                                    y: GRID_PAD + CGFloat(r)*stride)
-                            .onTapGesture { model.handleCellTap(row: r, col: c) }
+                        .frame(width: cs, height: cs)
+                        .contentShape(Rectangle())
+                        .offset(x: GRID_PAD + CGFloat(c)*stride,
+                                y: GRID_PAD + CGFloat(r)*stride)
+                        .onTapGesture { model.handleCellTap(row: r, col: c) }
                     }
                 }
 
@@ -347,7 +358,7 @@ struct GridBoardView: View {
                     ForEach(piece.shape.indices, id: \.self) { i in
                         let (dr, dc) = piece.shape[i]
                         let pr = cell.row + dr; let pc = cell.col + dc
-                        if pr >= 0 && pr < BOARD_SIZE && pc >= 0 && pc < BOARD_SIZE {
+                        if pr >= 0 && pr < BOARD_ROWS && pc >= 0 && pc < BOARD_COLS {
                             RoundedRectangle(cornerRadius: 4, style: .continuous)
                                 .fill(previewFill)
                                 .overlay(
@@ -364,7 +375,6 @@ struct GridBoardView: View {
             }
             .modifier(ShakeModifier(active: model.shake))
         }
-        .aspectRatio(1, contentMode: .fit)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(C_PANEL)
@@ -795,7 +805,6 @@ struct DailyGoalsSheet: View {
                     }
                 }
                 .listStyle(.insetGrouped)
-                .scrollContentBackground(.hidden)
             }
             .navigationTitle("Daily Goals")
             .navigationBarTitleDisplayMode(.inline)

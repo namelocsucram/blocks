@@ -1,8 +1,10 @@
 import SwiftUI
+import Combine
 
 // MARK: - Constants
 
-let BOARD_SIZE = 8
+let BOARD_COLS = 10
+let BOARD_ROWS = 11
 let MAX_HEAT = 24
 let REROLL_COST = 20
 let ERASER_COST = 15
@@ -10,23 +12,50 @@ private let GOLD_CHANCE: Double = 0.08
 private let INTERSTITIAL_EVERY = 3
 
 private let ALL_SHAPES: [[(Int, Int)]] = [
+    // 1-cell
     [(0,0)],
+    // 2-cell
     [(0,0),(0,1)],
     [(0,0),(1,0)],
+    // 3-cell straight
     [(0,0),(0,1),(0,2)],
     [(0,0),(1,0),(2,0)],
+    // 3-cell L / corner
+    [(0,0),(1,0),(1,1)],
+    [(0,1),(1,0),(1,1)],
+    [(0,0),(0,1),(1,0)],
+    [(0,0),(0,1),(1,1)],
+    // 4-cell straight
     [(0,0),(0,1),(0,2),(0,3)],
     [(0,0),(1,0),(2,0),(3,0)],
+    // 4-cell square
     [(0,0),(0,1),(1,0),(1,1)],
+    // 4-cell L shapes
     [(0,0),(0,1),(0,2),(1,0)],
     [(0,0),(0,1),(0,2),(1,2)],
     [(1,0),(1,1),(1,2),(0,0)],
     [(1,0),(1,1),(1,2),(0,2)],
+    // 4-cell S/Z
     [(0,0),(1,0),(1,1),(2,1)],
     [(0,1),(1,0),(1,1),(2,0)],
+    // 4-cell T
     [(0,0),(0,1),(0,2),(1,1)],
     [(0,1),(1,0),(1,1),(1,2)],
+    // 5-cell straight
+    [(0,0),(0,1),(0,2),(0,3),(0,4)],
+    [(0,0),(1,0),(2,0),(3,0),(4,0)],
+    // 5-cell L
+    [(0,0),(1,0),(2,0),(3,0),(3,1)],
+    [(0,0),(0,1),(0,2),(0,3),(1,0)],
+    // 5-cell plus
+    [(0,1),(1,0),(1,1),(1,2),(2,1)],
+    // 5-cell P (2x3 minus corner)
+    [(0,0),(0,1),(1,0),(1,1),(2,0)],
+    [(0,0),(0,1),(1,0),(1,1),(2,1)],
+    // 2x3 rectangle
     [(0,0),(0,1),(1,0),(1,1),(2,0),(2,1)],
+    // 3x2 rectangle
+    [(0,0),(0,1),(0,2),(1,0),(1,1),(1,2)],
 ]
 
 private let SIMPLE_SHAPES = ALL_SHAPES.filter { $0.count <= 3 }
@@ -53,7 +82,7 @@ let COIN_PACKS: [(id: String, coins: Int, price: String)] = [
 
 // MARK: - Data Models
 
-struct GridCell: Equatable {
+struct GridCell: Equatable, Codable {
     let colorIdx: Int
     let isGold: Bool
 }
@@ -89,6 +118,10 @@ struct DailyGoal: Identifiable, Codable, Equatable {
     var label: String
 }
 
+struct SavedRow: Codable {
+    var cells: [GridCell?]
+}
+
 struct SaveData: Codable {
     var best: Int = 0
     var sfxMuted: Bool = false
@@ -100,6 +133,10 @@ struct SaveData: Codable {
     var dailyGoals: [DailyGoal] = []
     var goalsDate: String? = nil
     var gamesSinceInterstitial: Int = 0
+    var savedGrid: [SavedRow]? = nil
+    var savedScore: Int = 0
+    var savedHeat: Int = 0
+    var savedCombo: Int = 0
 }
 
 // MARK: - Helpers
@@ -141,7 +178,7 @@ private func generateDailyGoals() -> [DailyGoal] {
 
 @MainActor
 class GameModel: ObservableObject {
-    @Published var grid: [[GridCell?]] = Array(repeating: Array(repeating: nil, count: BOARD_SIZE), count: BOARD_SIZE)
+    @Published var grid: [[GridCell?]] = Array(repeating: Array(repeating: nil, count: BOARD_COLS), count: BOARD_ROWS)
     @Published var tray: [GamePiece] = []
     @Published var score = 0
     @Published var best = 0
@@ -179,6 +216,7 @@ class GameModel: ObservableObject {
 
     private var idCounter = 1
     private var observers: [NSObjectProtocol] = []
+    private var cancellables = Set<AnyCancellable>()
 
     var heatPct: Double { Double(heat) / Double(MAX_HEAT) }
     var multiplierString: String { String(format: "×%.2f", 1.0 + Double(heat) * 0.125) }
@@ -204,6 +242,14 @@ class GameModel: ObservableObject {
     // MARK: - Observers
 
     private func setupObservers() {
+        // React to music toggle changes (dropFirst skips the initial value before save loads)
+        $musicMuted.dropFirst()
+            .sink { [weak self] muted in
+                guard let self else { return }
+                if muted { sound.stopMusic() } else { sound.startMusic() }
+            }
+            .store(in: &cancellables)
+
         observers.append(NotificationCenter.default.addObserver(
             forName: .rewardedAdEarned, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.grantRescueReward() }
@@ -273,15 +319,15 @@ class GameModel: ObservableObject {
     func canPlace(shape: [(Int, Int)], at r0: Int, col c0: Int) -> Bool {
         for (dr, dc) in shape {
             let r = r0 + dr, c = c0 + dc
-            guard r >= 0, r < BOARD_SIZE, c >= 0, c < BOARD_SIZE else { return false }
+            guard r >= 0, r < BOARD_ROWS, c >= 0, c < BOARD_COLS else { return false }
             guard grid[r][c] == nil else { return false }
         }
         return true
     }
 
     func anyPlacement(shape: [(Int, Int)]) -> Bool {
-        for r in 0..<BOARD_SIZE {
-            for c in 0..<BOARD_SIZE {
+        for r in 0..<BOARD_ROWS {
+            for c in 0..<BOARD_COLS {
                 if canPlace(shape: shape, at: r, col: c) { return true }
             }
         }
@@ -298,8 +344,8 @@ class GameModel: ObservableObject {
 
         var fullRows = [Int]()
         var fullCols = [Int]()
-        for r in 0..<BOARD_SIZE where newGrid[r].allSatisfy({ $0 != nil }) { fullRows.append(r) }
-        for c in 0..<BOARD_SIZE where newGrid.allSatisfy({ $0[c] != nil }) { fullCols.append(c) }
+        for r in 0..<BOARD_ROWS where newGrid[r].allSatisfy({ $0 != nil }) { fullRows.append(r) }
+        for c in 0..<BOARD_COLS where newGrid.allSatisfy({ $0[c] != nil }) { fullCols.append(c) }
         let linesCleared = fullRows.count + fullCols.count
 
         let oldHeat = heat
@@ -318,7 +364,7 @@ class GameModel: ObservableObject {
         let heatMult  = 1.0 + Double(newHeat) * 0.125
         let placePts  = piece.shape.count * (piece.isGold ? 6 : 2)
         let clearPts  = linesCleared > 0
-            ? Int(round(Double(linesCleared * BOARD_SIZE * 10) * heatMult * comboMult * burstMult))
+            ? Int(round(Double(linesCleared * BOARD_COLS * 10) * heatMult * comboMult * burstMult))
             : 0
 
         heat  = newHeat
@@ -329,7 +375,7 @@ class GameModel: ObservableObject {
         if linesCleared > 0 {
             coins += linesCleared + comboNext / 3
             let popText = comboNext > 1 ? "\(comboNext)x combo +\(clearPts)" : "Line clear +\(clearPts)"
-            comboPop = (id: Int(Date().timeIntervalSince1970 * 1000), text: popText)
+            showComboPop(popText)
             if linesCleared > 1 || comboNext >= 3 { triggerShake() }
         }
 
@@ -349,6 +395,10 @@ class GameModel: ObservableObject {
             else { sound.playPlace() }
         }
 
+        if linesCleared > 1      { hapticNotify(.success); hapticImpact(.heavy) }
+        else if linesCleared > 0 { hapticNotify(.success) }
+        else                     { hapticImpact(.medium) }
+
         let justHitMax = newHeat >= MAX_HEAT && oldHeat < MAX_HEAT && !bombArmed
         let diff = min(1.0, Double(score) / 4000.0)
 
@@ -365,15 +415,15 @@ class GameModel: ObservableObject {
 
         if linesCleared > 0 {
             var keys = Set<String>()
-            fullRows.forEach { r in (0..<BOARD_SIZE).forEach { c in keys.insert("\(r)-\(c)") } }
-            fullCols.forEach { c in (0..<BOARD_SIZE).forEach { r in keys.insert("\(r)-\(c)") } }
+            fullRows.forEach { r in (0..<BOARD_COLS).forEach { c in keys.insert("\(r)-\(c)") } }
+            fullCols.forEach { c in (0..<BOARD_ROWS).forEach { r in keys.insert("\(r)-\(c)") } }
             clearingCells = keys
             grid = newGrid
             Task {
                 try? await Task.sleep(nanoseconds: 220_000_000)
                 var cleared = newGrid
-                fullRows.forEach { r in (0..<BOARD_SIZE).forEach { c in cleared[r][c] = nil } }
-                fullCols.forEach { c in (0..<BOARD_SIZE).forEach { r in cleared[r][c] = nil } }
+                fullRows.forEach { r in (0..<BOARD_COLS).forEach { c in cleared[r][c] = nil } }
+                fullCols.forEach { c in (0..<BOARD_ROWS).forEach { r in cleared[r][c] = nil } }
                 grid = cleared
                 clearingCells = []
                 checkGameOver()
@@ -388,7 +438,7 @@ class GameModel: ObservableObject {
 
     private func detonateBomb() {
         var filled = [String]()
-        for r in 0..<BOARD_SIZE { for c in 0..<BOARD_SIZE { if grid[r][c] != nil { filled.append("\(r)-\(c)") } } }
+        for r in 0..<BOARD_ROWS { for c in 0..<BOARD_COLS { if grid[r][c] != nil { filled.append("\(r)-\(c)") } } }
         let bonus = 300 + filled.count * 15
         clearingCells = Set(filled)
         score += bonus
@@ -398,14 +448,19 @@ class GameModel: ObservableObject {
         jackpotBonus = bonus
         jackpotFlash = true
         shareReady = true
-        comboPop = (id: Int(Date().timeIntervalSince1970 * 1000), text: "BOARD WIPE +\(bonus)")
+        showComboPop("BOARD WIPE +\(bonus)")
         triggerShake()
         if !sfxMuted { sound.playJackpot() }
+        hapticImpact(.heavy)
+        Task {
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            hapticImpact(.heavy)
+        }
         heat = MAX_HEAT / 2
 
         Task {
             try? await Task.sleep(nanoseconds: 260_000_000)
-            grid = Array(repeating: Array(repeating: nil, count: BOARD_SIZE), count: BOARD_SIZE)
+            grid = Array(repeating: Array(repeating: nil, count: BOARD_COLS), count: BOARD_ROWS)
             clearingCells = []
             checkGameOver()
         }
@@ -432,6 +487,7 @@ class GameModel: ObservableObject {
         dragPiece = piece
         dragPosition = position
         updatePreview(at: position)
+        hapticImpact(.light)
     }
 
     func updateDrag(at position: CGPoint) {
@@ -445,20 +501,24 @@ class GameModel: ObservableObject {
             commitPlacement(piece: piece, row: cell.row, col: cell.col)
         } else if dragPiece != nil {
             if !sfxMuted { sound.playInvalid() }
+            hapticNotify(.warning)
         }
         dragPiece = nil
         previewCell = nil
     }
 
-    private func updatePreview(at globalPoint: CGPoint) {
+    private func updatePreview(at boardPoint: CGPoint) {
         guard let piece = dragPiece, !gridFrame.isEmpty else { previewCell = nil; return }
-        let cellSize = gridFrame.width / CGFloat(BOARD_SIZE)
-        let liftOffset: CGFloat = 70
-        let localX = globalPoint.x - gridFrame.minX
-        let localY = globalPoint.y - gridFrame.minY - liftOffset
-        let dims = piece.dims
-        let col = Int(floor(localX / cellSize)) - (dims.cols - 1) / 2
-        let row = Int(floor(localY / cellSize)) - (dims.rows - 1) / 2
+        // Must stay in sync with GRID_PAD / GRID_GAP constants in GameView.swift
+        let pad: CGFloat = 6
+        let gap: CGFloat = 3
+        let cs     = (gridFrame.width - 2*pad - gap * CGFloat(BOARD_COLS-1)) / CGFloat(BOARD_COLS)
+        let stride = cs + gap
+        let localX = boardPoint.x - gridFrame.minX - pad
+        let localY = boardPoint.y - gridFrame.minY - pad - 70  // 70 pt lift offset
+        let dims   = piece.dims
+        let col    = Int(floor(localX / stride)) - (dims.cols - 1) / 2
+        let row    = Int(floor(localY / stride)) - (dims.rows - 1) / 2
         previewCell = (row: row, col: col)
     }
 
@@ -478,6 +538,7 @@ class GameModel: ObservableObject {
         coins -= ERASER_COST
         eraseMode = false
         if !sfxMuted { sound.playBooster() }
+        hapticImpact(.medium)
         saveCurrent()
         checkGameOver()
     }
@@ -490,6 +551,7 @@ class GameModel: ObservableObject {
         let diff = min(1.0, Double(score) / 4000.0)
         tray = [makePiece(difficultyLevel: diff), makePiece(difficultyLevel: diff), makePiece(difficultyLevel: diff)]
         if !sfxMuted { sound.playBooster() }
+        hapticImpact(.light)
         showToast("Tray rerolled")
         saveCurrent()
     }
@@ -527,7 +589,7 @@ class GameModel: ObservableObject {
     }
 
     private func grantRescueReward() {
-        let filled = (0..<BOARD_SIZE).flatMap { r in (0..<BOARD_SIZE).compactMap { c in grid[r][c] != nil ? (r, c) : nil } }.shuffled()
+        let filled = (0..<BOARD_ROWS).flatMap { r in (0..<BOARD_COLS).compactMap { c in grid[r][c] != nil ? (r, c) : nil } }.shuffled()
         for (r, c) in filled.prefix(6) { grid[r][c] = nil }
         rescueUsed = true
         gameOver = false
@@ -538,7 +600,7 @@ class GameModel: ObservableObject {
     // MARK: - Restart
 
     func restart() {
-        grid = Array(repeating: Array(repeating: nil, count: BOARD_SIZE), count: BOARD_SIZE)
+        grid = Array(repeating: Array(repeating: nil, count: BOARD_COLS), count: BOARD_ROWS)
         score = 0
         heat = min(streak - 1, 5)
         gameOver = false
@@ -570,6 +632,7 @@ class GameModel: ObservableObject {
         guard !gameOver, clearingCells.isEmpty, !tray.isEmpty else { return }
         if tray.allSatisfy({ !anyPlacement(shape: $0.shape) }) {
             if !sfxMuted { sound.playGameOver() }
+            hapticNotify(.error)
             gameOver = true
         }
     }
@@ -579,8 +642,17 @@ class GameModel: ObservableObject {
     func showToast(_ message: String) {
         toast = message
         Task {
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
             if toast == message { toast = nil }
+        }
+    }
+
+    private func showComboPop(_ text: String) {
+        let pop = (id: Int(Date().timeIntervalSince1970 * 1000), text: text)
+        comboPop = pop
+        Task {
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            if comboPop?.id == pop.id { comboPop = nil }
         }
     }
 
@@ -656,12 +728,22 @@ class GameModel: ObservableObject {
         dailyGoals = newGoals
         goalsDate = newGoalsDate
         gamesSinceInterstitial = save.gamesSinceInterstitial
+        if let rows = save.savedGrid,
+           rows.count == BOARD_ROWS,
+           rows.allSatisfy({ $0.cells.count == BOARD_COLS }) {
+            grid = rows.map { $0.cells }
+            score = save.savedScore
+            heat  = save.savedHeat
+            combo = save.savedCombo
+        }
         loaded = true
+        if !musicMuted { sound.startMusic() }
 
         saveCurrent()
     }
 
     func saveCurrent() {
+        let savedGrid = gameOver ? nil : grid.map { SavedRow(cells: $0) }
         let save = SaveData(
             best: max(best, score),
             sfxMuted: sfxMuted,
@@ -672,10 +754,26 @@ class GameModel: ObservableObject {
             coins: coins,
             dailyGoals: dailyGoals,
             goalsDate: goalsDate,
-            gamesSinceInterstitial: gamesSinceInterstitial
+            gamesSinceInterstitial: gamesSinceInterstitial,
+            savedGrid: savedGrid,
+            savedScore: score,
+            savedHeat: heat,
+            savedCombo: combo
         )
         if let data = try? JSONEncoder().encode(save), let json = String(data: data, encoding: .utf8) {
             UserDefaults.standard.set(json, forKey: "stoke-save")
         }
+    }
+
+    // MARK: - Haptics
+
+    func hapticImpact(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
+        let g = UIImpactFeedbackGenerator(style: style)
+        g.impactOccurred()
+    }
+
+    func hapticNotify(_ type: UINotificationFeedbackGenerator.FeedbackType) {
+        let g = UINotificationFeedbackGenerator()
+        g.notificationOccurred(type)
     }
 }
