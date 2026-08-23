@@ -51,6 +51,7 @@ enum NativeBridgeMode {
 struct ContentView: View {
     @StateObject private var messageHandler = WebViewMessageHandler()
     @State private var webView: WKWebView?
+    @State private var launchWarning: String?
 
     var body: some View {
         ZStack {
@@ -71,10 +72,34 @@ struct ContentView: View {
                     // Visual aiming aid: small cursor above the finger during drags
                     TouchCursorOverlay(targetView: webView)
                 )
+                .overlay(alignment: .top) {
+                    if let launchWarning {
+                        Text(launchWarning)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color.orange.opacity(0.92))
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
             }
         }
         .preferredColorScheme(.dark)
         .statusBarHidden()
+        .onReceive(NotificationCenter.default.publisher(for: .revenueCatConfigurationWarning)) { notification in
+            launchWarning = notification.object as? String
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .adMobConfigurationWarning)) { notification in
+            launchWarning = notification.object as? String
+        }
     }
     
     private static var defaultBridgeMode: NativeBridgeMode {

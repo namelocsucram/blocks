@@ -17,6 +17,7 @@ struct blocksApp: App {
         try? AVAudioSession.sharedInstance().setActive(true)
 
         requestTrackingAuthorizationIfNeeded()
+        validateLaunchConfiguration()
 
         // Initialize RevenueCat
         PurchaseManager.shared.configure()
@@ -28,6 +29,24 @@ struct blocksApp: App {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             ATTrackingManager.requestTrackingAuthorization { _ in }
+        }
+    }
+
+    private func validateLaunchConfiguration() {
+        let defaults = Bundle.main
+
+        if (defaults.object(forInfoDictionaryKey: "GADApplicationIdentifier") as? String)?.isEmpty != false {
+            NotificationCenter.default.post(
+                name: .adMobConfigurationWarning,
+                object: "AdMob not configured: add GADApplicationIdentifier to the app Info.plist."
+            )
+        }
+
+        if (defaults.object(forInfoDictionaryKey: "NSUserTrackingUsageDescription") as? String)?.isEmpty != false {
+            NotificationCenter.default.post(
+                name: .adMobConfigurationWarning,
+                object: "AdMob consent not configured: add NSUserTrackingUsageDescription to the app Info.plist."
+            )
         }
     }
     

@@ -34,9 +34,19 @@ class PurchaseManager: NSObject {
     func configure() {
         guard !Purchases.isConfigured else { return }
         guard !apiKey.isEmpty else {
-            print("RevenueCat not configured: add RevenueCatAPIKey to the app Info.plist.")
+            let message = "RevenueCat not configured: add RevenueCatAPIKey to the app Info.plist."
+            print(message)
+            NotificationCenter.default.post(name: .revenueCatConfigurationWarning, object: message)
             return
         }
+        #if !DEBUG
+        guard apiKey.hasPrefix("appl_") else {
+            let message = "RevenueCat skipped: release builds require a production public API key starting with appl_."
+            print(message)
+            NotificationCenter.default.post(name: .revenueCatConfigurationWarning, object: message)
+            return
+        }
+        #endif
         
         Purchases.configure(withAPIKey: apiKey)
     }
@@ -161,4 +171,6 @@ extension Notification.Name {
     static let purchaseSuccess = Notification.Name("purchaseSuccess")
     static let purchaseFailed = Notification.Name("purchaseFailed")
     static let purchaseCancelled = Notification.Name("purchaseCancelled")
+    static let revenueCatConfigurationWarning = Notification.Name("revenueCatConfigurationWarning")
+    static let adMobConfigurationWarning = Notification.Name("adMobConfigurationWarning")
 }
