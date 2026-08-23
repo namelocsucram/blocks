@@ -134,6 +134,7 @@ struct WebViewContainer: UIViewRepresentable {
         stokeBridgeLogger.notice("makeUIView begin bridgeMode=\(String(describing: bridgeMode), privacy: .public)")
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
         
         Self.registerScriptMessageHandlers(
             for: bridgeMode,
@@ -632,18 +633,16 @@ final class NativeAdMobBridge: NSObject, FullScreenContentDelegate, BannerViewDe
         }
 
         NSLayoutConstraint.deactivate(bannerConstraints)
-        let bannerVerticalOffset: CGFloat = 50
         let centerX = slotFrame?.midX ?? hostView.bounds.midX
-        let centerY = (slotFrame?.midY ?? (hostView.safeAreaInsets.top + 93)) + bannerVerticalOffset
         bannerConstraints = [
             banner.centerXAnchor.constraint(equalTo: hostView.leadingAnchor, constant: centerX),
-            banner.centerYAnchor.constraint(equalTo: hostView.topAnchor, constant: centerY)
+            banner.bottomAnchor.constraint(equalTo: hostView.safeAreaLayoutGuide.bottomAnchor)
         ]
         NSLayoutConstraint.activate(bannerConstraints)
 
         bannerView = banner
         banner.load(Request())
-        stokeBridgeLogger.notice("Requested banner ad at x=\(centerX, privacy: .public) y=\(centerY, privacy: .public)")
+        stokeBridgeLogger.notice("Requested banner ad anchored to bottom at x=\(centerX, privacy: .public)")
     }
 
     private func removeBanner() {

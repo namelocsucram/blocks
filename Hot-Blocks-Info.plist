@@ -4,6 +4,12 @@
 <dict>
     <key>GADApplicationIdentifier</key>
     <string>ca-app-pub-7262617456411456~5433417356</string>
+    <key>RevenueCatAPIKey</key>
+    <string>test_TikeKfmfcUbcOAEWUZyfPOTKgUc</string>
+    <key>NSUserTrackingUsageDescription</key>
+    <string>Allow tracking to help show ads that are more relevant to you and support STOKE.</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
     <key>SKAdNetworkItems</key>
     <array>
         <dict>

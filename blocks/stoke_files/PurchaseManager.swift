@@ -11,9 +11,9 @@ import RevenueCat
 class PurchaseManager: NSObject {
     static let shared = PurchaseManager()
     
-    // Replace with the production public iOS key from RevenueCat: appl_...
-    // Keep this owned by Swift so JavaScript cannot reconfigure the SDK.
-    private let apiKey = "appl_REPLACE_WITH_PRODUCTION_KEY"
+    // Read the public RevenueCat SDK key from the app bundle so release builds
+    // can be configured without hardcoding secrets in source.
+    private let apiKey = Bundle.main.object(forInfoDictionaryKey: "RevenueCatAPIKey") as? String ?? ""
     
     var offerings: Offerings?
     
@@ -33,8 +33,8 @@ class PurchaseManager: NSObject {
     
     func configure() {
         guard !Purchases.isConfigured else { return }
-        guard apiKey.hasPrefix("appl_"), apiKey != "appl_REPLACE_WITH_PRODUCTION_KEY" else {
-            print("RevenueCat not configured: replace apiKey with your production appl_... key.")
+        guard !apiKey.isEmpty else {
+            print("RevenueCat not configured: add RevenueCatAPIKey to the app Info.plist.")
             return
         }
         

@@ -141,7 +141,7 @@ function useDeviceLayout() {
   const isTablet = viewport.width >= 700;
   const isWide = viewport.width >= 860 && viewport.width > viewport.height;
   const isCompact = viewport.width < 390 || viewport.height < 700;
-  const verticalReserve = isCompact ? 378 : isTablet ? 430 : 400;
+  const verticalReserve = isCompact ? 460 : isTablet ? 520 : 480;
   const heightBound = Math.max(260, viewport.height - verticalReserve);
   const boardSize = Math.min(
     isTablet ? 560 : 460,
@@ -167,7 +167,7 @@ function useDeviceLayout() {
     boosterBar: {
       gap: isCompact ? 6 : 8,
       marginTop: isCompact ? 8 : 6,
-      marginBottom: isCompact ? 10 : 0,
+      marginBottom: isCompact ? 72 : 56,
       position: "static",
       paddingBottom: 0,
     },
@@ -209,12 +209,21 @@ function useAudio(sfxMuted, musicMuted, heatPct) {
   useEffect(() => { musicMutedRef.current = musicMuted; }, [musicMuted]);
   useEffect(() => { heatRef.current = heatPct; }, [heatPct]);
   const musicTimerRef = useRef(null);
+  const musicKeepAliveRef = useRef(null);
   const musicStartedRef = useRef(false);
+  const musicBusRef = useRef(null);
 
   const ensure = () => {
     if (!ctxRef.current) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (AC) ctxRef.current = new AC();
+      if (ctxRef.current) {
+        ctxRef.current.onstatechange = () => {
+          if (ctxRef.current?.state === "suspended" && musicStartedRef.current) {
+            ctxRef.current.resume().catch(() => {});
+          }
+        };
+      }
     }
     return ctxRef.current;
   };
@@ -235,54 +244,170 @@ function useAudio(sfxMuted, musicMuted, heatPct) {
     osc.start(t0); osc.stop(t0 + dur + 0.02);
   };
   const beep = (...args) => { if (!sfxMutedRef.current) tone(...args); };
+  const ensureMusicBus = () => {
+    const ctx = ensure();
+    if (!ctx) return null;
+    if (!musicBusRef.current) {
+      const comp = ctx.createDynamicsCompressor();
+      const lowpass = ctx.createBiquadFilter();
+      const delay = ctx.createDelay(0.28);
+      const feedback = ctx.createGain();
+      const wet = ctx.createGain();
+      const master = ctx.createGain();
+      comp.threshold.value = -26;
+      comp.knee.value = 20;
+      comp.ratio.value = 6;
+      comp.attack.value = 0.01;
+      comp.release.value = 0.18;
+      lowpass.type = "lowpass";
+      lowpass.frequency.value = 6400;
+      lowpass.Q.value = 0.42;
+      delay.delayTime.value = 0.24;
+      feedback.gain.value = 0.16;
+      wet.gain.value = 0.18;
+      master.gain.value = 0.34;
+      comp.connect(lowpass);
+      lowpass.connect(master);
+      lowpass.connect(delay);
+      delay.connect(feedback);
+      feedback.connect(delay);
+      delay.connect(wet);
+      wet.connect(master);
+      master.connect(ctx.destination);
+      musicBusRef.current = { input: comp, master };
+    }
+    return musicBusRef.current.input;
+  };
+  const musicTone = (freq, dur = 0.22, type = "triangle", gain = 0.018, delay = 0, cutoff = null, detune = 0) => {
+    const ctx = ensure();
+    const bus = ensureMusicBus();
+    if (!ctx || !bus) return;
+    if (ctx.state === "suspended") ctx.resume();
+    const t0 = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const filter = ctx.createBiquadFilter();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    if (detune) osc.detune.setValueAtTime(detune, t0);
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(cutoff ?? Math.min(9000, Math.max(180, freq * 6)), t0);
+    filter.Q.value = 0.35;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(gain, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    osc.connect(filter);
+    filter.connect(g);
+    g.connect(bus);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.03);
+  };
 
-  // Procedural upbeat casino loop with three anti-repetition techniques:
-  //  1. Humanization — small random jitter on gain/timing every repeat, so no
-  //     two loops sound mechanically identical.
-  //  2. Reactive intensity — tempo and layering respond to current heat, so the
-  //     music actually tracks what's happening instead of looping blind.
-  //  3. Phrase variation — a different bridge riff swaps in every 8 bars
-  //     instead of the same 4-chord cycle forever.
+  // Procedural loop with a warmer mix and more structure:
+  //  1. A small echo gives the theme space without washing out the rhythm.
+  //  2. The loop follows a fixed 16-step hook so it reads like a melody instead
+  //     of a pile of independent beeps.
+  //  3. Heat still brightens the arrangement, but the core phrase stays clear.
   const PROGRESSION = [
     { chord: [261.6, 329.6, 392.0], bass: 130.8 }, // C
     { chord: [392.0, 493.9, 587.3], bass: 196.0 }, // G
     { chord: [220.0, 261.6, 329.6], bass: 110.0 }, // Am
     { chord: [349.2, 440.0, 523.3], bass: 174.6 }, // F
   ];
-  const BRIDGE = [523.3, 587.3, 659.3, 784.0, 659.3, 587.3]; // quick ascending/descending run
+  const BRIDGE = [523.3, 587.3, 659.3, 784.0, 659.3, 587.3, 523.3, 392.0];
+  const HOOK = [0, 4, 7, 9, 7, 4, 2, 4, 0, 4, 7, 9, 12, 9, 7, 4];
+  const REPLY = [12, 9, 7, 4, 7, 9, 12, 14, 12, 9, 7, 4, 2, 4, 7, 9];
+  const BASS_PATTERN = [0, 7, 0, 5, 0, 7, 12, 7, 0, 7, 0, 5, 0, 9, 7, 12];
+  const COUNTER_PATTERN = [12, 12, 0, 7, 0, 9, 0, 7, 12, 12, 0, 7, 0, 9, 0, 7];
   const jitter = (v, amt) => v * (1 - amt + Math.random() * amt * 2);
+  const heatGain = (base, heat, scale = 1) => base + Math.min(heat / 100, 1) * scale;
 
   function startMusic() {
     if (musicStartedRef.current) return;
     musicStartedRef.current = true;
     let step = 0;
+    if (!musicMutedRef.current) {
+      [261.6, 329.6, 392.0, 523.3, 659.3, 783.99].forEach((f, i) => musicTone(f, 0.18 + i * 0.02, i % 2 === 0 ? "triangle" : "square", 0.032, i * 0.06, 5200));
+      musicTone(130.8, 0.34, "sine", 0.09, 0.02, 240);
+      musicTone(784.0, 0.2, "square", 0.022, 0.18, 7600);
+    }
     const loop = () => {
       if (!musicMutedRef.current) {
         const h = heatRef.current || 0; // 0-100
-        const isBridge = step > 0 && step % 8 === 7;
+        const intensity = Math.min(1, h / 100);
+        const stepInBar = step % 16;
+        const phrase = Math.floor(step / 16) % PROGRESSION.length;
+        const chord = PROGRESSION[phrase];
+        const nextChord = PROGRESSION[(phrase + 1) % PROGRESSION.length];
+        const isBridge = step > 0 && step % 32 === 31;
+        const swing = stepInBar % 2 === 1 ? 0.018 : 0;
         if (isBridge) {
-          BRIDGE.forEach((f, i) => tone(jitter(f, 0.01), 0.18, "triangle", jitter(0.022, 0.3), i * 0.09));
+          BRIDGE.forEach((f, i) => musicTone(jitter(f, 0.006), 0.22 + i * 0.016, i % 2 ? "triangle" : "sine", heatGain(0.01, h, 0.008), i * 0.08, 3600 + intensity * 1800));
+          musicTone(chord.bass / 2, 0.18, "sine", 0.04 + intensity * 0.014, 0, 220);
+          musicTone(nextChord.chord[2] * 2, 0.16, "triangle", 0.008 + intensity * 0.003, 0.26, 6200);
+          musicTone(nextChord.chord[0] * 2, 0.14, "sine", 0.007 + intensity * 0.003, 0.5, 5600);
         } else {
-          const { chord, bass } = PROGRESSION[step % PROGRESSION.length];
-          tone(jitter(bass, 0.005), 0.45, "triangle", jitter(0.032, 0.25), 0);
-          chord.forEach((f, i) => tone(jitter(f, 0.006), 0.3, "square", jitter(0.018, 0.3), 0.08 + i * jitter(0.09, 0.2)));
-          tone(chord[2] * 2, 0.14, "sine", 0.018, 0.42);
-          tone(3400, 0.02, "square", 0.012, 0.02);
-          tone(3400, 0.02, "square", 0.01, 0.38);
-          // extra excitement layer kicks in once heat builds up
-          if (h > 40) tone(chord[1] * 2, 0.12, "triangle", 0.014, 0.58);
-          if (h > 75) tone(chord[0] * 4, 0.08, "sine", 0.012, 0.66);
+          const kick = stepInBar === 0 || stepInBar === 8;
+          const snare = stepInBar === 4 || stepInBar === 12;
+          const hat = stepInBar % 2 === 1;
+          const clap = stepInBar === 4 || stepInBar === 12;
+          const lift = stepInBar === 15;
+          const chordHit = stepInBar === 0 || stepInBar === 8 || lift;
+          const bassFreq = chord.bass * Math.pow(2, BASS_PATTERN[stepInBar] / 12);
+          musicTone(jitter(bassFreq, 0.003), 0.34, "triangle", heatGain(0.018, h, 0.01), 0, 180 + intensity * 100);
+          if (kick) {
+            musicTone(chord.bass / 2, 0.1, "sine", 0.05 + intensity * 0.016, 0, 150);
+            musicTone(64, 0.05, "square", 0.016 + intensity * 0.006, 0.01, 280);
+          }
+          if (snare) {
+            musicTone(210, 0.07, "square", 0.016 + intensity * 0.006, 0, 700);
+            musicTone(2600, 0.05, "square", 0.01 + intensity * 0.003, 0.015, 8800);
+          }
+          if (clap) {
+            musicTone(1800, 0.04, "square", 0.006 + intensity * 0.002, 0.02, 7600);
+            musicTone(4200, 0.03, "square", 0.0045 + intensity * 0.0015, 0.03, 9000);
+          }
+          if (hat) {
+            if (stepInBar >= 8) musicTone(7900, 0.016, "square", 0.0045 + intensity * 0.0018, 0.02, 9200);
+          }
+          if (chordHit) {
+            chord.chord.forEach((f, i) => musicTone(jitter(f * (i === 0 ? 1 : 2), 0.0025), 0.18 + i * 0.02, i === 0 ? "triangle" : "sine", 0.007 + intensity * 0.003, i * 0.03, 4400 + intensity * 1400));
+          }
+          const motif = stepInBar < 8 ? HOOK : REPLY;
+          const melodyFreq = chord.chord[0] * Math.pow(2, motif[stepInBar] / 12) * (stepInBar >= 8 ? 2 : 1);
+          musicTone(melodyFreq, 0.16 + (stepInBar % 4 === 3 ? 0.04 : 0), stepInBar % 4 === 0 ? "square" : "triangle", 0.011 + intensity * 0.004, 0.18 + swing, 4200 + intensity * 1800, stepInBar % 4 === 1 ? -4 : 0);
+          if (stepInBar % 4 === 2) musicTone(chord.chord[1] * (stepInBar >= 8 ? 2 : 1), 0.12, "triangle", 0.006 + intensity * 0.002, 0.28 + swing, 3800 + intensity * 900);
+          if (stepInBar % 4 === 3 && h > 20) {
+            const counter = chord.chord[0] * Math.pow(2, COUNTER_PATTERN[stepInBar] / 12);
+            musicTone(counter, 0.1, "sine", 0.006 + intensity * 0.002, 0.34 + swing, 3400 + intensity * 700);
+          }
+          if (lift) {
+            musicTone(nextChord.chord[0] * 2, 0.14, "triangle", 0.007 + intensity * 0.0025, 0.04, 5200);
+            musicTone(nextChord.chord[2] * 2, 0.12, "sine", 0.0065 + intensity * 0.0025, 0.18, 6400);
+          }
+          if (h > 35 && stepInBar === 7) musicTone(chord.chord[1] * 2, 0.14, "triangle", 0.006 + intensity * 0.0025, 0.58, 5000);
+          if (h > 70 && stepInBar === 15) musicTone(chord.chord[0] * 4, 0.16, "sine", 0.007 + intensity * 0.0025, 0.74, 6800);
         }
       }
       step++;
-      const heatSpeedup = Math.min(180, (heatRef.current || 0) * 2.2);
-      musicTimerRef.current = setTimeout(loop, 760 - heatSpeedup);
+      const heatSpeedup = Math.min(240, (heatRef.current || 0) * 2.5);
+      const groove = step % 8 === 6 ? 18 : 0;
+      musicTimerRef.current = setTimeout(loop, Math.max(360, 780 - heatSpeedup - groove));
     };
     loop();
+    if (musicKeepAliveRef.current) clearInterval(musicKeepAliveRef.current);
+    musicKeepAliveRef.current = setInterval(() => {
+      if (!musicStartedRef.current || musicMutedRef.current) return;
+      const ctx = ensure();
+      if (ctx?.state === "suspended") ctx.resume().catch(() => {});
+      musicTone(392.0, 0.16, "triangle", 0.009, 0, 2400);
+      musicTone(523.3, 0.14, "sine", 0.0075, 0.08, 3200);
+    }, 2200);
   }
   function stopMusic() {
     musicStartedRef.current = false;
     if (musicTimerRef.current) clearTimeout(musicTimerRef.current);
+    if (musicKeepAliveRef.current) clearInterval(musicKeepAliveRef.current);
   }
 
   return {
@@ -376,6 +501,7 @@ function Stoke() {
   const [rescuing, setRescuing] = useState(false);
   const [bombArmed, setBombArmed] = useState(false);
   const [jackpotFlash, setJackpotFlash] = useState(false);
+  const [jackpotBonus, setJackpotBonus] = useState(null);
   const [shareReady, setShareReady] = useState(false);
   const [coins, setCoins] = useState(0);
   const [eraseMode, setEraseMode] = useState(false);
@@ -399,6 +525,25 @@ function Stoke() {
   const heatPct = Math.round((heat / MAX_HEAT) * 100);
   const sound = useAudio(sfxMuted, musicMuted, heatPct);
   const deviceLayout = useDeviceLayout();
+
+  useEffect(() => {
+    const unlockMusic = () => sound.startMusic();
+    const opts = { once: true, passive: true };
+    window.addEventListener("pointerdown", unlockMusic, opts);
+    window.addEventListener("touchstart", unlockMusic, opts);
+    window.addEventListener("keydown", unlockMusic, opts);
+    return () => {
+      window.removeEventListener("pointerdown", unlockMusic);
+      window.removeEventListener("touchstart", unlockMusic);
+      window.removeEventListener("keydown", unlockMusic);
+    };
+  }, [sound]);
+
+  useEffect(() => {
+    if (!loaded || musicMuted) return;
+    const t = setTimeout(() => sound.startMusic(), 120);
+    return () => clearTimeout(t);
+  }, [loaded, musicMuted, sound]);
 
   useEffect(() => {
     (async () => {
@@ -466,7 +611,10 @@ function Stoke() {
 
   useEffect(() => {
     if (!jackpotFlash) return;
-    const t = setTimeout(() => setJackpotFlash(false), 1300);
+    const t = setTimeout(() => {
+      setJackpotFlash(false);
+      setJackpotBonus(null);
+    }, 1500);
     return () => clearTimeout(t);
   }, [jackpotFlash]);
 
@@ -498,16 +646,10 @@ function Stoke() {
     if (!isNative() || !plugins || !plugins.AdMob) return;
     plugins.AdMob.initialize().then(() => {
       const showNativeBanner = () => {
-        const adSlot = document.getElementById("stoke-ad-banner-slot");
-        const adBannerFrame = adSlot ? (() => {
-          const rect = adSlot.getBoundingClientRect();
-          return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
-        })() : null;
         plugins.AdMob.showBanner({
           adId: ADMOB_BANNER_ID,
           adSize: "BANNER",
-          position: "TOP_CENTER",
-          adBannerFrame,
+          position: "BOTTOM_CENTER",
         }).catch(() => {});
       };
       requestAnimationFrame(() => setTimeout(showNativeBanner, 50));
@@ -561,6 +703,7 @@ function Stoke() {
     setEraseMode(false);
     setCombo(0);
     setComboPop(null);
+    setJackpotBonus(null);
     setShake(false);
     setRunMission(createRunMission());
     setRunStats(createRunStats());
@@ -739,6 +882,7 @@ function Stoke() {
     setRunStats((stats) => ({ ...stats, jackpots: stats.jackpots + 1, coinsEarned: stats.coinsEarned + 10 }));
     bumpGoal("jackpot", 1);
     bumpRunMission("jackpot", 1);
+    setJackpotBonus(bonus);
     setJackpotFlash(true);
     setShareReady(true);
     setToast(`JACKPOT! +${bonus}`);
@@ -956,8 +1100,6 @@ function Stoke() {
         </div>
       </div>
 
-      <div id="stoke-ad-banner-slot" style={{ ...S.adBanner, ...deviceLayout.adBanner }}>{isNative() ? "" : "Ad banner placeholder · 320×50 — real in native build"}</div>
-
       <button style={S.goalsToggle} onClick={() => setShowGoals((v) => !v)}>
         <span>🎯 Daily Objectives</span>
         <span style={S.goalsCount}>
@@ -992,21 +1134,11 @@ function Stoke() {
         </div>
       )}
 
-      <div style={S.runMission}>
-        <div style={S.runMissionTop}>
-          <span style={S.runMissionLabel}>Run Mission</span>
-          <span style={S.runMissionReward}>{runMission.claimed ? "claimed" : `+${runMission.reward} coins`}</span>
-        </div>
-        <div style={S.runMissionText}>{runMission.label}</div>
-        <div style={S.runMissionTrack}>
-          <div style={{ ...S.runMissionFill, width: `${runMissionPct}%` }} />
-        </div>
-      </div>
-
       <div style={{ ...S.statsRow, ...deviceLayout.statsRow }}>
-        <div style={{ ...S.statBox, ...deviceLayout.statBox }}><div style={S.statLabel}>Score</div><div style={{ ...S.statValue, ...deviceLayout.statValue }}>{score}</div></div>
+        <div style={{ ...S.statBox, ...deviceLayout.statBox, flex: 1.1, borderColor: "#FFD65A", background: "linear-gradient(180deg, rgba(49, 28, 74, 0.96), rgba(30, 16, 48, 0.98))", boxShadow: "0 0 0 1px rgba(255, 214, 90, 0.16), 0 10px 22px rgba(0, 0, 0, 0.18)" }}><div style={{ ...S.statLabel, color: "#FFF3C4" }}>Score</div><div style={{ ...S.statValue, ...deviceLayout.statValue, fontSize: deviceLayout.statValue.fontSize + 6, color: "#FFFFFF", lineHeight: 1 }}>{score}</div></div>
+        <div style={{ ...S.statBox, ...deviceLayout.statBox, flex: 1.1, borderColor: "#9D4A24", background: "linear-gradient(180deg, rgba(39, 24, 58, 0.96), rgba(23, 14, 36, 0.98))" }}><div style={{ ...S.statLabel, color: "#FFD65A" }}>Best</div><div style={{ ...S.statValue, ...deviceLayout.statValue }}>{best}</div></div>
         <div style={{ ...S.statBox, ...deviceLayout.statBox }}><div style={S.statLabel}>Combo</div><div style={{ ...S.statValue, ...deviceLayout.statValue }}>{combo > 0 ? `${combo}x` : "-"}</div></div>
-        <div style={{ ...S.statBox, ...deviceLayout.statBox, flex: 1.4 }}>
+        <div style={{ ...S.statBox, ...deviceLayout.statBox, flex: 1.3 }}>
           <div style={S.statLabel}>Heat ×{multiplier}</div>
           <div style={S.heatTrack}>
             <div key={pulse} style={{ ...S.heatFill, width: `${heatPct}%`, animation: "heatPulse 0.3s ease", transformOrigin: "center" }} />
@@ -1047,7 +1179,12 @@ function Stoke() {
         </div>
         {comboPop && <div key={comboPop.id} style={S.comboPop}>{comboPop.text}</div>}
         {toast && <div style={S.toast}>{toast}</div>}
-        {jackpotFlash && <div style={S.jackpotBanner}>JACKPOT!</div>}
+        {jackpotFlash && (
+          <div style={S.jackpotBanner}>
+            <div>JACKPOT!</div>
+            {jackpotBonus != null && <div style={S.jackpotScore}>+{jackpotBonus}</div>}
+          </div>
+        )}
         {shareReady && (
           <button style={S.shareBtn} onClick={() => shareJackpotCard(score, multiplier)}>📸 Share Jackpot</button>
         )}
@@ -1085,6 +1222,7 @@ function Stoke() {
           🪙 Get coins
         </button>
       </div>
+
 
       {drag && (
         <div style={{ position: "fixed", left: drag.x - drag.dims.w * 13, top: drag.y - drag.dims.h * 13 - (drag.pointerType === "touch" ? 70 : 0), pointerEvents: "none", display: "grid", gridTemplateColumns: `repeat(${drag.dims.w}, 26px)`, gridTemplateRows: `repeat(${drag.dims.h}, 26px)`, gap: "3px", zIndex: 50 }}>
@@ -1179,7 +1317,7 @@ const S = {
     ].join(", "),
     color: "#F3ECE3",
     minHeight: "100%",
-    padding: "10px 16px 10px",
+    padding: "10px 16px 104px",
     maxWidth: 460,
     margin: "0 auto",
     position: "relative",
@@ -1289,7 +1427,10 @@ const S = {
   jackpotBanner: {
     position: "absolute", left: "50%", top: "50%", fontFamily: "'Baloo 2', sans-serif", fontWeight: 800, fontSize: 46,
     background: "linear-gradient(180deg, #FFF3C4, #FFD65A, #FF8A3D)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-    textShadow: "0 0 30px rgba(255,214,90,0.7)", animation: "jackpotZoom 1.3s ease forwards", pointerEvents: "none", zIndex: 30, letterSpacing: "0.03em",
+    textShadow: "0 0 30px rgba(255,214,90,0.7)", animation: "jackpotZoom 1.5s ease forwards", pointerEvents: "none", zIndex: 30, letterSpacing: "0.03em", textAlign: "center", lineHeight: 0.9,
+  },
+  jackpotScore: {
+    marginTop: 8, fontSize: 26, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.02em",
   },
   shareBtn: {
     position: "absolute", left: "50%", bottom: 10, transform: "translateX(-50%)", zIndex: 31,
