@@ -515,7 +515,7 @@ class GameModel: ObservableObject {
         let cs     = (gridFrame.width - 2*pad - gap * CGFloat(BOARD_COLS-1)) / CGFloat(BOARD_COLS)
         let stride = cs + gap
         let localX = boardPoint.x - gridFrame.minX - pad
-        let localY = boardPoint.y - gridFrame.minY - pad - 70  // 70 pt lift offset
+        let localY = boardPoint.y - gridFrame.minY - pad - 110  // lift offset — matches FloatingPieceView y offset
         let dims   = piece.dims
         let col    = Int(floor(localX / stride)) - (dims.cols - 1) / 2
         let row    = Int(floor(localY / stride)) - (dims.rows - 1) / 2
@@ -595,6 +595,10 @@ class GameModel: ObservableObject {
         gameOver = false
         rescuing = false
         if !sfxMuted { sound.playRescue() }
+        NativeAdMobBridge.shared.handle([
+            "action": "prepareRewardVideoAd",
+            "options": ["adId": "ca-app-pub-7262617456411456/7812048544"]
+        ])
     }
 
     // MARK: - Restart
@@ -634,6 +638,10 @@ class GameModel: ObservableObject {
             if !sfxMuted { sound.playGameOver() }
             hapticNotify(.error)
             gameOver = true
+            NativeAdMobBridge.shared.handle([
+                "action": "prepareRewardVideoAd",
+                "options": ["adId": "ca-app-pub-7262617456411456/7812048544"]
+            ])
         }
     }
 

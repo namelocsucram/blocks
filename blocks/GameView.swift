@@ -85,7 +85,7 @@ struct GameView: View {
             if let piece = model.dragPiece {
                 FloatingPieceView(piece: piece)
                     .position(x: model.dragPosition.x,
-                              y: model.dragPosition.y - 70)
+                              y: model.dragPosition.y - 110)
                     .allowsHitTesting(false)
             }
 
