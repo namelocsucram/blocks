@@ -252,11 +252,11 @@ class GameModel: ObservableObject {
 
         observers.append(NotificationCenter.default.addObserver(
             forName: .rewardedAdEarned, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.grantRescueReward() }
+            Task { @MainActor [weak self] in self?.grantRescueReward() }
         })
         observers.append(NotificationCenter.default.addObserver(
             forName: .rewardedAdFailed, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.rescuing = false
                 self?.showToast("Ad unavailable — try again shortly")
             }
@@ -264,7 +264,7 @@ class GameModel: ObservableObject {
         observers.append(NotificationCenter.default.addObserver(
             forName: .purchaseSuccess, object: nil, queue: .main) { [weak self] note in
             guard let dict = note.object as? [String: String], let ident = dict["identifier"] else { return }
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 if let pack = COIN_PACKS.first(where: { $0.id == ident }) {
                     self?.coins += pack.coins
                     self?.showToast("+\(pack.coins) coins purchased!")
@@ -275,11 +275,11 @@ class GameModel: ObservableObject {
         })
         observers.append(NotificationCenter.default.addObserver(
             forName: .purchaseFailed, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.showToast("Purchase failed") }
+            Task { @MainActor [weak self] in self?.showToast("Purchase failed") }
         })
         observers.append(NotificationCenter.default.addObserver(
             forName: .purchaseCancelled, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.showToast("Purchase cancelled") }
+            Task { @MainActor [weak self] in self?.showToast("Purchase cancelled") }
         })
     }
 
@@ -402,7 +402,7 @@ class GameModel: ObservableObject {
         let justHitMax = newHeat >= MAX_HEAT && oldHeat < MAX_HEAT && !bombArmed
         let diff = min(1.0, Double(score) / 4000.0)
 
-        var remaining = tray.filter { $0.id != piece.id }
+        let remaining = tray.filter { $0.id != piece.id }
         var nextTray = remaining.isEmpty
             ? [makePiece(difficultyLevel: diff), makePiece(difficultyLevel: diff), makePiece(difficultyLevel: diff)]
             : remaining
