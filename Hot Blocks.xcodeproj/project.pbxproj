@@ -290,9 +290,11 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Hot-Blocks-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Hot Blocks";
+				INFOPLIST_KEY_CFBundleDisplayName = "Stoke Block Puzzle";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.puzzle-games";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Allow tracking to help show ads that are more relevant to you and support STOKE.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -307,7 +309,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.smcgames..blocks;
+				PRODUCT_BUNDLE_IDENTIFIER = com.smcsoftware.stokeblockpuzzle;
 				PRODUCT_NAME = "Stoke Block Puzzle";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -337,9 +339,11 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Hot-Blocks-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Hot Blocks";
+				INFOPLIST_KEY_CFBundleDisplayName = "Stoke Block Puzzle";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.puzzle-games";
+				INFOPLIST_KEY_NSUserTrackingUsageDescription = "Allow tracking to help show ads that are more relevant to you and support STOKE.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -354,7 +358,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.smcgames..blocks;
+				PRODUCT_BUNDLE_IDENTIFIER = com.smcsoftware.stokeblockpuzzle;
 				PRODUCT_NAME = "Stoke Block Puzzle";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
