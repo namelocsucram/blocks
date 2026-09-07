@@ -3,8 +3,8 @@ import Combine
 
 // MARK: - Constants
 
-let BOARD_COLS = 10
-let BOARD_ROWS = 11
+let BOARD_COLS = 9
+let BOARD_ROWS = 9
 let MAX_HEAT = 24
 let REROLL_COST = 20
 let ERASER_COST = 15
